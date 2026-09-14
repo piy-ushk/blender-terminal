@@ -9,9 +9,15 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
 
 
+def get_addon_name() -> str:
+    pkg = __package__
+    if pkg and pkg.startswith("bl_ext."):
+        return ".".join(pkg.split(".")[:3])
+    return pkg.split(".")[0] if pkg else "blender_agent_terminal"
+
+
 class BATAddonPreferences(bpy.types.AddonPreferences):
-    # Must match the `id` field in blender_manifest.toml
-    bl_idname = "blender_agent_terminal"
+    bl_idname = get_addon_name()
 
     font_size: IntProperty(
         name="Font Size",
@@ -25,12 +31,13 @@ class BATAddonPreferences(bpy.types.AddonPreferences):
         name="Color Theme",
         description="Terminal color scheme",
         items=[
+            ("BLENDER",   "Blender Native", "Adapt to Blender's UI Theme"),
             ("DARK",      "Dark",           "Classic dark terminal"),
             ("DRACULA",   "Dracula",        "Dracula color scheme"),
             ("SOLARIZED", "Solarized Dark", "Solarized Dark scheme"),
             ("LIGHT",     "Light",          "Light background terminal"),
         ],
-        default="DARK",
+        default="BLENDER",
     )  # type: ignore
 
     shell: StringProperty(
@@ -69,7 +76,8 @@ class BATAddonPreferences(bpy.types.AddonPreferences):
 
 def get_prefs(context: bpy.types.Context) -> BATAddonPreferences:
     """Convenience accessor for preferences."""
-    return context.preferences.addons["blender_agent_terminal"].preferences
+    addon = context.preferences.addons.get(get_addon_name())
+    return addon.preferences if addon else None
 
 
 CLASSES = [BATAddonPreferences]

@@ -99,12 +99,16 @@ class BAT_PT_TerminalPanel(Panel):
         # ── Settings shortcut ─────────────────────────────────────────────
         layout.label(text="Settings:", icon="PREFERENCES")
         try:
-            prefs = context.preferences.addons["blender_agent_terminal"].preferences
-            col = layout.column(align=True)
-            col.prop(prefs, "font_size")
-            col.prop(prefs, "theme")
-        except Exception:
-            layout.label(text="(Open Preferences to configure)", icon="INFO")
+            from ..blender.preferences import get_prefs
+            prefs = get_prefs(context)
+            if prefs:
+                col = layout.column(align=True)
+                col.prop(prefs, "font_size")
+                col.prop(prefs, "theme")
+            else:
+                layout.label(text="(Preferences not loaded)", icon="ERROR")
+        except Exception as exc:
+            layout.label(text=f"(Error: {exc})", icon="INFO")
 
 
 def _short_path(path: str, max_len: int = 28) -> str:

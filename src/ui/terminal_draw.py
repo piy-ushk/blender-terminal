@@ -131,17 +131,20 @@ def _get_blender_theme(context: bpy.types.Context) -> dict:
 
 def _get_theme(context: bpy.types.Context) -> dict:
     try:
-        prefs = context.preferences.addons["blender_agent_terminal"].preferences
-        if prefs.theme == "BLENDER":
+        from ..blender.preferences import get_prefs
+        prefs = get_prefs(context)
+        if prefs and prefs.theme == "BLENDER":
             return _get_blender_theme(context)
-        return _THEMES.get(prefs.theme, _THEMES["DARK"])
+        return _THEMES.get(prefs.theme if prefs else "DARK", _THEMES["DARK"])
     except Exception:
         return _THEMES["DARK"]
 
 
 def _get_font_size(context: bpy.types.Context) -> int:
     try:
-        return context.preferences.addons["blender_agent_terminal"].preferences.font_size
+        from ..blender.preferences import get_prefs
+        prefs = get_prefs(context)
+        return prefs.font_size if prefs else 13
     except Exception:
         return 13
 
