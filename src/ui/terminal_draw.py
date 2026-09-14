@@ -99,9 +99,41 @@ _THEMES = {
 }
 
 
+def _get_blender_theme(context: bpy.types.Context) -> dict:
+    try:
+        theme = context.preferences.themes[0]
+        te = theme.text_editor
+        
+        def rgba(col, alpha=1.0):
+            c = list(col)
+            if len(c) == 3: c.append(alpha)
+            return tuple(c)
+            
+        bg = rgba(te.space.back)
+        fg = rgba(te.space.text)
+        cursor = rgba(te.cursor, 0.85)
+        statusbar_bg = rgba(te.space.header)
+        selection = rgba(te.space.text_selection, 0.4)
+        
+        return {
+            "bg": bg,
+            "statusbar_bg": statusbar_bg,
+            "statusbar_fg": fg,
+            "cursor": cursor,
+            "selection": selection,
+            "inputbar_bg": bg,
+            "inputbar_fg": fg,
+            "prompt": (0.4, 0.9, 0.4, 1.0)
+        }
+    except Exception:
+        return _THEMES["DARK"]
+
+
 def _get_theme(context: bpy.types.Context) -> dict:
     try:
         prefs = context.preferences.addons["blender_agent_terminal"].preferences
+        if prefs.theme == "BLENDER":
+            return _get_blender_theme(context)
         return _THEMES.get(prefs.theme, _THEMES["DARK"])
     except Exception:
         return _THEMES["DARK"]
@@ -112,6 +144,16 @@ def _get_font_size(context: bpy.types.Context) -> int:
         return context.preferences.addons["blender_agent_terminal"].preferences.font_size
     except Exception:
         return 13
+
+
+def _get_dpi(context: bpy.types.Context) -> int:
+    try:
+        scale = context.preferences.view.ui_scale
+        # pixel_size is 2.0 on Mac Retina displays
+        pixel_size = context.preferences.system.pixel_size
+        return int(72 * scale * pixel_size)
+    except Exception:
+        return 72
 
 
 # ─── Font loading ─────────────────────────────────────────────────────────────
@@ -135,15 +177,15 @@ def _load_font() -> None:
     log.warning("JetBrains Mono not found, using default font (grid may not align)")
 
 
-def _measure_char(font_size: int) -> Tuple[float, float]:
+def _measure_char(font_size: int, dpi: int = 72) -> Tuple[float, float]:
     """Measure a representative monospace character cell."""
     _load_font()
-    blf.size(_font_id, font_size)
+    blf.size(_font_id, font_size, dpi)
     w, h = blf.dimensions(_font_id, "M")
     if w <= 0:
-        w = font_size * 0.6
+        w = font_size * 0.6 * (dpi / 72.0)
     if h <= 0:
-        h = font_size * 1.4
+        h = font_size * 1.4 * (dpi / 72.0)
     return w, h
 
 
@@ -217,7 +259,8 @@ def draw_terminal() -> None:
     # ── Font + sizing ──────────────────────────────────────────────────────
     _load_font()
     font_size = _get_font_size(context)
-    char_w, char_h = _measure_char(font_size)
+    dpi = _get_dpi(context)
+    char_w, char_h = _measure_char(font_size, dpi)
 
     # Update session terminal size if area has changed significantly
     cols = max(10, int((rw - _PAD_X * 2) / char_w))
@@ -244,7 +287,7 @@ def draw_terminal() -> None:
     cmd_text = " ".join(session.cmd) if session.cmd else "—"
     cwd_text = _truncate_path(session.cwd, max_len=40)
 
-    blf.size(_font_id, 11)
+    blf.size(_font_id, 11, dpi)
     blf.color(_font_id, *theme["statusbar_fg"])
     blf.position(_font_id, _PAD_X, 6, 0)
     blf.draw(_font_id, f"  {cmd_text}  │  {cwd_text}  │  {status_text}")
@@ -254,7 +297,7 @@ def draw_terminal() -> None:
     _draw_rect(0, input_bar_y, rw, char_h + _PAD_Y * 2, theme["inputbar_bg"])
 
     input_text = wm.bat_input_line if hasattr(wm, "bat_input_line") else ""
-    blf.size(_font_id, font_size)
+    blf.size(_font_id, font_size, dpi)
     blf.color(_font_id, *theme["prompt"])
     blf.position(_font_id, _PAD_X, input_bar_y + _PAD_Y + 1, 0)
     blf.draw(_font_id, "❯ ")
@@ -292,7 +335,7 @@ def draw_terminal() -> None:
             break
 
         # Render this line: batch same-color consecutive chars
-        _render_line(line, y, char_w, char_h, font_size, _PAD_X)
+        _render_line(line, y, char_w, char_h, font_size, _PAD_X, dpi)
 
     # ── Draw PTY cursor ────────────────────────────────────────────────────
     if cursor_on and session.is_alive():
@@ -311,6 +354,7 @@ def _render_line(
     char_h: float,
     font_size: int,
     pad_x: float,
+    dpi: int,
 ) -> None:
     """
     Render a single RenderedLine using blf.
@@ -320,7 +364,7 @@ def _render_line(
     if not line:
         return
 
-    blf.size(_font_id, font_size)
+    blf.size(_font_id, font_size, dpi)
 
     # Group consecutive chars by color
     batch_start = 0
