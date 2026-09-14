@@ -225,6 +225,16 @@ def _draw_rect(x: float, y: float, w: float, h: float, color: Tuple) -> None:
 # ─── Main draw callback ───────────────────────────────────────────────────────
 
 def draw_terminal() -> None:
+    try:
+        _draw_terminal_impl()
+    except Exception as e:
+        import traceback
+        err = traceback.format_exc()
+        log.error("DRAW ERROR: %s\n%s", e, err)
+        with open("/tmp/bat_draw_error.txt", "w") as f:
+            f.write(err)
+
+def _draw_terminal_impl() -> None:
     """
     Called by Blender every frame for every TEXT_EDITOR area.
     We skip areas that don't have an active terminal session.
@@ -274,12 +284,7 @@ def draw_terminal() -> None:
         session.resize(cols, rows)
 
     # ── Theme ──────────────────────────────────────────────────────────────
-    theme_name = "DARK"
-    try:
-        theme_name = context.preferences.addons["blender_agent_terminal"].preferences.theme
-    except Exception:
-        pass
-    theme = _THEMES.get(theme_name, _THEMES["DARK"])
+    theme = _get_theme(context)
 
     # ── Draw background ────────────────────────────────────────────────────
     _draw_rect(0, 0, rw, rh, theme["bg"])
