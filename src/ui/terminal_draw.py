@@ -1,0 +1,382 @@
+"""
+Blender Agent Terminal — GPU + BLF Draw Handler
+
+Renders the terminal screen buffer directly into the TEXT_EDITOR area's
+WINDOW region using Blender's GPU and BLF (font) APIs.
+
+Architecture:
+  - draw_terminal() is registered via SpaceTextEditor.draw_handler_add
+    with draw_type='POST_PIXEL'.
+  - POST_PIXEL means coordinates are in screen pixels, (0,0) = bottom-left.
+  - We draw: background rect → character grid → cursor → status bar → input bar.
+
+Performance notes:
+  - The pyte screen buffer is read as a snapshot each frame.
+  - Character batching: consecutive chars of the same color are batched
+    into a single blf.draw() call for performance.
+  - Background rectangles use gpu_extras.batch for GPU-accelerated drawing.
+  - Font and shader objects are cached at module level; never created per-frame.
+"""
+
+import math
+import os
+import time
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+import bpy
+import blf
+import gpu
+from gpu_extras.batch import batch_for_shader
+
+from ..core.log import get_logger
+from ..terminal.screen import RenderedChar, RenderedLine, _DEFAULT_FG, _DEFAULT_BG
+
+log = get_logger("ui.terminal_draw")
+
+# ─── Module-level state ───────────────────────────────────────────────────────
+
+_draw_handler = None          # handle returned by draw_handler_add
+_font_id: int = 0             # blf font id (0 = default, or loaded monospace)
+_font_loaded: bool = False    # whether we loaded our custom font
+_shader = None                # GPU uniform-color shader (cached)
+_char_w: float = 8.0          # character cell width in pixels
+_char_h: float = 16.0         # character cell height in pixels
+
+# Terminal padding (pixels)
+_PAD_X = 8
+_PAD_Y = 4
+
+# Status bar height
+_STATUS_H = 22
+
+# Cursor blink period in seconds
+_CURSOR_BLINK_PERIOD = 1.0
+
+# ─── Theme definitions ────────────────────────────────────────────────────────
+
+_THEMES = {
+    "DARK": {
+        "bg":          (0.08, 0.08, 0.08, 1.0),
+        "statusbar_bg": (0.14, 0.14, 0.14, 1.0),
+        "statusbar_fg": (0.60, 0.60, 0.60, 1.0),
+        "cursor":      (0.95, 0.95, 0.95, 0.85),
+        "selection":   (0.20, 0.40, 0.75, 0.40),
+        "inputbar_bg": (0.12, 0.12, 0.12, 1.0),
+        "inputbar_fg": (0.90, 0.90, 0.90, 1.0),
+        "prompt":      (0.40, 0.90, 0.40, 1.0),
+    },
+    "DRACULA": {
+        "bg":          (0.157, 0.165, 0.212, 1.0),
+        "statusbar_bg": (0.102, 0.106, 0.137, 1.0),
+        "statusbar_fg": (0.627, 0.627, 0.627, 1.0),
+        "cursor":      (0.973, 0.973, 0.949, 0.9),
+        "selection":   (0.267, 0.275, 0.357, 0.7),
+        "inputbar_bg": (0.118, 0.122, 0.157, 1.0),
+        "inputbar_fg": (0.973, 0.973, 0.949, 1.0),
+        "prompt":      (0.314, 0.980, 0.482, 1.0),
+    },
+    "SOLARIZED": {
+        "bg":          (0.0, 0.168, 0.212, 1.0),
+        "statusbar_bg": (0.0, 0.129, 0.165, 1.0),
+        "statusbar_fg": (0.514, 0.580, 0.588, 1.0),
+        "cursor":      (0.933, 0.910, 0.835, 0.9),
+        "selection":   (0.071, 0.259, 0.322, 0.7),
+        "inputbar_bg": (0.0, 0.145, 0.188, 1.0),
+        "inputbar_fg": (0.933, 0.910, 0.835, 1.0),
+        "prompt":      (0.522, 0.600, 0.000, 1.0),
+    },
+    "LIGHT": {
+        "bg":          (0.97, 0.97, 0.97, 1.0),
+        "statusbar_bg": (0.88, 0.88, 0.88, 1.0),
+        "statusbar_fg": (0.30, 0.30, 0.30, 1.0),
+        "cursor":      (0.10, 0.10, 0.10, 0.85),
+        "selection":   (0.70, 0.85, 1.00, 0.50),
+        "inputbar_bg": (0.93, 0.93, 0.93, 1.0),
+        "inputbar_fg": (0.10, 0.10, 0.10, 1.0),
+        "prompt":      (0.10, 0.55, 0.10, 1.0),
+    },
+}
+
+
+def _get_theme(context: bpy.types.Context) -> dict:
+    try:
+        prefs = context.preferences.addons["blender_agent_terminal"].preferences
+        return _THEMES.get(prefs.theme, _THEMES["DARK"])
+    except Exception:
+        return _THEMES["DARK"]
+
+
+def _get_font_size(context: bpy.types.Context) -> int:
+    try:
+        return context.preferences.addons["blender_agent_terminal"].preferences.font_size
+    except Exception:
+        return 13
+
+
+# ─── Font loading ─────────────────────────────────────────────────────────────
+
+def _load_font() -> None:
+    global _font_id, _font_loaded
+    if _font_loaded:
+        return
+    # Path to the bundled JetBrains Mono font, relative to this file
+    font_path = Path(__file__).parent.parent.parent / "fonts" / "JetBrainsMono-Regular.ttf"
+    if font_path.is_file():
+        loaded_id = blf.load(str(font_path))
+        if loaded_id >= 0:
+            _font_id = loaded_id
+            _font_loaded = True
+            log.info("Loaded JetBrains Mono font (id=%d)", _font_id)
+            return
+    # Fallback to Blender default font (font_id 0)
+    _font_id = 0
+    _font_loaded = True
+    log.warning("JetBrains Mono not found, using default font (grid may not align)")
+
+
+def _measure_char(font_size: int) -> Tuple[float, float]:
+    """Measure a representative monospace character cell."""
+    _load_font()
+    blf.size(_font_id, font_size)
+    w, h = blf.dimensions(_font_id, "M")
+    if w <= 0:
+        w = font_size * 0.6
+    if h <= 0:
+        h = font_size * 1.4
+    return w, h
+
+
+# ─── GPU helpers ──────────────────────────────────────────────────────────────
+
+def _get_shader():
+    global _shader
+    if _shader is None:
+        _shader = gpu.shader.from_builtin("UNIFORM_COLOR")
+    return _shader
+
+
+def _draw_rect(x: float, y: float, w: float, h: float, color: Tuple) -> None:
+    """Draw a filled rectangle at (x, y) with size (w, h)."""
+    shader = _get_shader()
+    vertices = [
+        (x,     y    ),
+        (x + w, y    ),
+        (x + w, y + h),
+        (x,     y + h),
+    ]
+    batch = batch_for_shader(shader, "TRIS", {"pos": [
+        vertices[0], vertices[1], vertices[2],
+        vertices[0], vertices[2], vertices[3],
+    ]})
+    shader.bind()
+    shader.uniform_float("color", color)
+    gpu.state.blend_set("ALPHA")
+    batch.draw(shader)
+    gpu.state.blend_set("NONE")
+
+
+# ─── Main draw callback ───────────────────────────────────────────────────────
+
+def draw_terminal() -> None:
+    """
+    Called by Blender every frame for every TEXT_EDITOR area.
+    We skip areas that don't have an active terminal session.
+    """
+    context = bpy.context
+
+    if not context or not context.area:
+        return
+    if context.area.type != "TEXT_EDITOR":
+        return
+
+    wm = context.window_manager
+    if not wm.bat_terminal_active:
+        return
+
+    from ..terminal.manager import get_manager
+    manager = get_manager()
+    if not manager:
+        return
+    session = manager.get_active()
+    if not session:
+        return
+
+    # Find the WINDOW region dimensions
+    region = None
+    for r in context.area.regions:
+        if r.type == "WINDOW":
+            region = r
+            break
+    if region is None:
+        return
+
+    rw = region.width
+    rh = region.height
+
+    # ── Font + sizing ──────────────────────────────────────────────────────
+    _load_font()
+    font_size = _get_font_size(context)
+    char_w, char_h = _measure_char(font_size)
+
+    # Update session terminal size if area has changed significantly
+    cols = max(10, int((rw - _PAD_X * 2) / char_w))
+    rows = max(5, int((rh - _PAD_Y * 2 - _STATUS_H - char_h) / char_h))
+    if cols != session.screen.cols or rows != session.screen.rows:
+        session.resize(cols, rows)
+
+    # ── Theme ──────────────────────────────────────────────────────────────
+    theme_name = "DARK"
+    try:
+        theme_name = context.preferences.addons["blender_agent_terminal"].preferences.theme
+    except Exception:
+        pass
+    theme = _THEMES.get(theme_name, _THEMES["DARK"])
+
+    # ── Draw background ────────────────────────────────────────────────────
+    _draw_rect(0, 0, rw, rh, theme["bg"])
+
+    # ── Draw status bar (bottom strip) ────────────────────────────────────
+    _draw_rect(0, 0, rw, _STATUS_H, theme["statusbar_bg"])
+
+    # Status text
+    status_text = session.status_label
+    cmd_text = " ".join(session.cmd) if session.cmd else "—"
+    cwd_text = _truncate_path(session.cwd, max_len=40)
+
+    blf.size(_font_id, 11)
+    blf.color(_font_id, *theme["statusbar_fg"])
+    blf.position(_font_id, _PAD_X, 6, 0)
+    blf.draw(_font_id, f"  {cmd_text}  │  {cwd_text}  │  {status_text}")
+
+    # ── Draw input bar (one row above status) ─────────────────────────────
+    input_bar_y = _STATUS_H
+    _draw_rect(0, input_bar_y, rw, char_h + _PAD_Y * 2, theme["inputbar_bg"])
+
+    input_text = wm.bat_input_line if hasattr(wm, "bat_input_line") else ""
+    blf.size(_font_id, font_size)
+    blf.color(_font_id, *theme["prompt"])
+    blf.position(_font_id, _PAD_X, input_bar_y + _PAD_Y + 1, 0)
+    blf.draw(_font_id, "❯ ")
+    prompt_w, _ = blf.dimensions(_font_id, "❯ ")
+
+    blf.color(_font_id, *theme["inputbar_fg"])
+    blf.position(_font_id, _PAD_X + prompt_w, input_bar_y + _PAD_Y + 1, 0)
+    blf.draw(_font_id, input_text)
+
+    # Input cursor blink
+    t = time.monotonic()
+    cursor_on = (int(t / (_CURSOR_BLINK_PERIOD / 2)) % 2) == 0
+    if cursor_on and wm.bat_input_active:
+        input_w, _ = blf.dimensions(_font_id, input_text) if input_text else (0.0, 0.0)
+        cx = _PAD_X + prompt_w + input_w
+        cy = input_bar_y + _PAD_Y
+        _draw_rect(cx, cy, max(2, char_w * 0.15), char_h, theme["cursor"])
+
+    # ── Draw terminal screen buffer ────────────────────────────────────────
+    term_area_y = input_bar_y + char_h + _PAD_Y * 2
+    term_area_h = rh - term_area_y
+
+    lines = session.screen.get_display_lines()
+
+    # Render from top of terminal area downward
+    # Blender's y=0 is at bottom; lines[0] is top of screen.
+    # So we render lines starting from (rh - char_h) and going down.
+    start_y = rh - char_h - _PAD_Y
+
+    for row_idx, line in enumerate(lines):
+        y = start_y - row_idx * char_h
+
+        # Skip rows below the input bar
+        if y < term_area_y:
+            break
+
+        # Render this line: batch same-color consecutive chars
+        _render_line(line, y, char_w, char_h, font_size, _PAD_X)
+
+    # ── Draw PTY cursor ────────────────────────────────────────────────────
+    if cursor_on and session.is_alive():
+        cur_row = session.screen.cursor_row
+        cur_col = session.screen.cursor_col
+        cx = _PAD_X + cur_col * char_w
+        cy = start_y - cur_row * char_h
+        if cy >= term_area_y:
+            _draw_rect(cx, cy, char_w, char_h, theme["cursor"])
+
+
+def _render_line(
+    line: RenderedLine,
+    y: float,
+    char_w: float,
+    char_h: float,
+    font_size: int,
+    pad_x: float,
+) -> None:
+    """
+    Render a single RenderedLine using blf.
+    Consecutive characters with the same fg color are batched into
+    one blf.draw() call for performance.
+    """
+    if not line:
+        return
+
+    blf.size(_font_id, font_size)
+
+    # Group consecutive chars by color
+    batch_start = 0
+    batch_fg = line[0].fg
+    batch_chars = []
+
+    def flush_batch(end_col: int):
+        if not batch_chars:
+            return
+        text = "".join(batch_chars)
+        x = pad_x + batch_start * char_w
+        blf.color(_font_id, *batch_fg)
+        blf.position(_font_id, x, y, 0)
+        blf.draw(_font_id, text)
+
+    for col_idx, rchar in enumerate(line):
+        if rchar.fg != batch_fg:
+            flush_batch(col_idx)
+            batch_start = col_idx
+            batch_fg = rchar.fg
+            batch_chars = [rchar.char]
+        else:
+            batch_chars.append(rchar.char)
+
+    flush_batch(len(line))
+
+
+def _truncate_path(path: str, max_len: int = 40) -> str:
+    """Shorten a path for display in the status bar."""
+    if len(path) <= max_len:
+        return path
+    parts = Path(path).parts
+    if len(parts) <= 2:
+        return path
+    return "…/" + str(Path(*parts[-2:]))
+
+
+# ─── Handler registration ─────────────────────────────────────────────────────
+
+def register_draw_handler() -> None:
+    global _draw_handler
+    if _draw_handler is not None:
+        return  # Already registered
+    _draw_handler = bpy.types.SpaceTextEditor.draw_handler_add(
+        draw_terminal, (), "WINDOW", "POST_PIXEL"
+    )
+    log.debug("Draw handler registered on SpaceTextEditor")
+
+
+def unregister_draw_handler() -> None:
+    global _draw_handler
+    if _draw_handler is None:
+        return
+    try:
+        bpy.types.SpaceTextEditor.draw_handler_remove(_draw_handler, "WINDOW")
+    except Exception as exc:
+        log.debug("Draw handler removal: %s", exc)
+    _draw_handler = None
+    log.debug("Draw handler unregistered")
