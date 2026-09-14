@@ -1,0 +1,25 @@
+schema_version = "1.0.0"
+
+id = "blender_agent_terminal"
+version = "0.1.0"
+name = "Blender Agent Terminal"
+tagline = "Integrated interactive terminal — run Claude, Gemini CLI, npm, git inside Blender"
+maintainer = "Blender Agent Terminal Contributors"
+type = "add-on"
+
+website = "https://github.com/piyushk/blender-terminal"
+
+tags = ["User Interface", "Development", "Pipeline"]
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+
+# Bundled Python wheels (pure Python — compatible with all platforms)
+wheels = [
+    "./wheels/pyte-0.8.0-py2.py3-none-any.whl",
+    "./wheels/wcwidth-0.8.3-py3-none-any.whl",
+]
+
+# Target platforms — Blender uses "os-arch" string format
+platforms = ["macos-arm64", "macos-x86_64", "linux-x86_64", "windows-x86_64"]
