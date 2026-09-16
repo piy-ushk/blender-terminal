@@ -479,8 +479,8 @@ def _mouse_to_col_row(context, event, session):
     col = int((x - pad_x) / char_w)
     
     # Include scroll offset so the selection maps to the visible line
-    row = max(0, min(row, session._rows - 1))
-    col = max(0, min(col, session._cols - 1))
+    row = max(0, min(row, session.screen.rows - 1))
+    col = max(0, min(col, session.screen.cols - 1))
     
     return col, row
 

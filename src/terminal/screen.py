@@ -143,6 +143,14 @@ class TerminalScreen:
 
         self._init_pyte()
 
+    @property
+    def cols(self) -> int:
+        return self._cols
+
+    @property
+    def rows(self) -> int:
+        return self._rows
+
     def _init_pyte(self) -> None:
         import pyte
         self._screen = pyte.Screen(self._cols, self._rows)
