@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "blender_agent_terminal"
-version = "1.0.0"
+version = "1.0.1"
 name = "Blender Agent Terminal"
 tagline = "Interactive terminal for Claude, Gemini, npm & git in Blender"
 maintainer = "Blender Agent Terminal Contributors"

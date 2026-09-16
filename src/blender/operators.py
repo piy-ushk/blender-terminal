@@ -587,11 +587,8 @@ class BAT_OT_toggle_terminal_window(bpy.types.Operator):
             self.report({"WARNING"}, "No valid area to duplicate")
             return {"CANCELLED"}
             
-        dup_override = context.copy()
-        dup_override["area"] = target_area
-        
-        # Duplicate area to new window
-        bpy.ops.screen.area_dupli(dup_override, 'EXEC_DEFAULT')
+        with context.temp_override(window=context.window, area=target_area, region=target_area.regions[0]):
+            bpy.ops.screen.area_dupli('EXEC_DEFAULT')
         # Find the new window
         new_windows = set(context.window_manager.windows) - old_windows
         if not new_windows:
@@ -605,12 +602,8 @@ class BAT_OT_toggle_terminal_window(bpy.types.Operator):
         area.type = "TEXT_EDITOR"
         
         # Open terminal in that area
-        override = context.copy()
-        override["window"] = win
-        override["screen"] = win.screen
-        override["area"] = area
-        
-        bpy.ops.bat.open_terminal(override)
+        with context.temp_override(window=win, screen=win.screen, area=area, region=area.regions[0]):
+            bpy.ops.bat.open_terminal('INVOKE_DEFAULT')
         
         return {"FINISHED"}
 
@@ -639,9 +632,8 @@ class BAT_OT_create_workspace(bpy.types.Operator):
                 # but since we just switched to it, we can use the current context's new area.
                 # Actually, the workspace switch might be deferred. 
                 # Let's tag the area to open a terminal.
-                override = context.copy()
-                override["area"] = largest
-                bpy.ops.bat.open_terminal(override)
+                with context.temp_override(window=context.window, screen=screen, area=largest, region=largest.regions[0]):
+                    bpy.ops.bat.open_terminal('INVOKE_DEFAULT')
         else:
             # Just switch to it
             context.window.workspace = bpy.data.workspaces[ws_name]
