@@ -250,7 +250,7 @@ class TerminalScreen:
             max(0, len(self._scrollback) - self._scroll_offset):
         ]
         combined = scrollback_slice + screen_lines
-        return combined[-self._rows:]  # only return rows-worth of lines
+        return combined[:self._rows]  # only return rows-worth of lines
 
     @property
     def cursor_row(self) -> int:

@@ -364,12 +364,12 @@ class BAT_OT_input_modal(bpy.types.Operator):
                 else:
                     session.screen.scroll_up(3)
                 context.area.tag_redraw()
-                return {"RUNNING_MODAL"}
+                return {"PASS_THROUGH"}
 
             if event.type in _SCROLL_DOWN_KEYS:
                 session.screen.scroll_down(3)
                 context.area.tag_redraw()
-                return {"RUNNING_MODAL"}
+                return {"PASS_THROUGH"}
 
             # Text selection
             if event.type == "LEFTMOUSE":
@@ -379,20 +379,20 @@ class BAT_OT_input_modal(bpy.types.Operator):
                     session.screen.selection_start = (col, row)
                     session.screen.selection_end = (col, row)
                     context.area.tag_redraw()
-                    return {"RUNNING_MODAL"}
+                    return {"PASS_THROUGH"}
                 elif event.value == "RELEASE":
                     if self._is_selecting:
                         self._is_selecting = False
                         col, row = _mouse_to_col_row(context, event, session)
                         session.screen.selection_end = (col, row)
                         context.area.tag_redraw()
-                    return {"RUNNING_MODAL"}
+                    return {"PASS_THROUGH"}
 
             if event.type == "MOUSEMOVE" and self._is_selecting:
                 col, row = _mouse_to_col_row(context, event, session)
                 session.screen.selection_end = (col, row)
                 context.area.tag_redraw()
-                return {"RUNNING_MODAL"}
+                return {"PASS_THROUGH"}
 
         # Only act on PRESS events for keyboard keys
         if event.value not in {"PRESS"}:
