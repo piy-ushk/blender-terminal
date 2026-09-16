@@ -10,6 +10,7 @@ Provides:
 import os
 import shutil
 import sys
+import subprocess
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -38,6 +39,45 @@ _KNOWN_TOOLS: Dict[str, str] = {
     "zsh":     "Zsh",
     "sh":      "POSIX shell",
 }
+
+
+# ─── PATH Resolution ──────────────────────────────────────────────────────────
+
+_CACHED_PATH = None
+
+def _get_interactive_path() -> str:
+    """
+    On macOS GUI apps, os.environ["PATH"] is heavily restricted to /usr/bin.
+    This fetches the true PATH from the user's interactive shell.
+    """
+    global _CACHED_PATH
+    if _CACHED_PATH is not None:
+        return _CACHED_PATH
+    
+    _CACHED_PATH = os.environ.get("PATH", "")
+    if sys.platform != "darwin":
+        return _CACHED_PATH
+
+    try:
+        shell = os.environ.get("SHELL", "/bin/zsh")
+        result = subprocess.run(
+            [shell, "-ilc", "env"],
+            capture_output=True,
+            text=True,
+            timeout=2.0
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("PATH="):
+                _CACHED_PATH = line[5:]
+                break
+    except Exception as e:
+        log.warning("Failed to fetch interactive PATH: %s", e)
+        
+    return _CACHED_PATH
+
+# Inject true PATH into Blender's environment on module load
+if sys.platform == "darwin":
+    os.environ["PATH"] = _get_interactive_path()
 
 
 def find_executable(name: str) -> Optional[str]:
@@ -93,6 +133,18 @@ def get_user_env() -> Dict[str, str]:
     # that resolve 'python' via PYTHONHOME/PYTHONPATH.
     for key in ("PYTHONHOME", "PYTHONPATH"):
         env.pop(key, None)
+
+    # ─── Start IPC Server & Inject bridge ───
+    try:
+        from ..core.ipc import start_ipc_server, generate_bpy_exec
+        port = start_ipc_server()
+        bin_dir = generate_bpy_exec(port)
+        
+        env["BLENDER_IPC_PORT"] = str(port)
+        # Prepend our bin_dir to PATH so bpy-exec is immediately available
+        env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
+    except Exception as e:
+        log.error("Failed to start IPC server: %s", e)
 
     return env
 

@@ -68,17 +68,17 @@ def _event_to_bytes(event) -> Optional[bytes]:
     """
     key = event.type
 
-    # Ctrl+C → SIGINT
-    if key == "C" and event.ctrl and not event.shift and not event.alt:
+    # Ctrl+C → SIGINT (Check explicitly for Ctrl, not Cmd/OSKey on Mac)
+    if key == "C" and event.ctrl and not event.shift and not event.alt and not event.oskey:
         return b"\x03"
     # Ctrl+D → EOF
-    if key == "D" and event.ctrl and not event.shift and not event.alt:
+    if key == "D" and event.ctrl and not event.shift and not event.alt and not event.oskey:
         return b"\x04"
     # Ctrl+L → clear screen
-    if key == "L" and event.ctrl and not event.shift and not event.alt:
+    if key == "L" and event.ctrl and not event.shift and not event.alt and not event.oskey:
         return b"\x0c"
     # Ctrl+Z → suspend
-    if key == "Z" and event.ctrl and not event.shift and not event.alt:
+    if key == "Z" and event.ctrl and not event.shift and not event.alt and not event.oskey:
         return b"\x1a"
     # Ctrl+A → beginning of line
     if key == "A" and event.ctrl and not event.shift and not event.alt:
@@ -97,7 +97,7 @@ def _event_to_bytes(event) -> Optional[bytes]:
         return _KEY_TO_BYTES[key]
 
     # Printable character via event.unicode
-    if event.unicode and not event.ctrl and not event.alt:
+    if event.unicode and not event.ctrl and not event.alt and not event.oskey:
         char = event.unicode
         if char:
             return char.encode("utf-8")
@@ -340,16 +340,6 @@ class BAT_OT_input_modal(bpy.types.Operator):
         if not context.area or context.area.type != "TEXT_EDITOR":
             return {"PASS_THROUGH"}
 
-        # Only act on PRESS events (not RELEASE / CLICK)
-        if event.value not in {"PRESS"}:
-            # But handle mouse wheel scroll
-            if event.type in _SCROLL_UP_KEYS and event.value == "PRESS":
-                pass  # handled below
-            elif event.type in _SCROLL_DOWN_KEYS and event.value == "PRESS":
-                pass
-            else:
-                return {"PASS_THROUGH"}
-
         from ..terminal.manager import get_manager
         manager = get_manager()
         if not manager:
@@ -367,6 +357,38 @@ class BAT_OT_input_modal(bpy.types.Operator):
         if event.type in _SCROLL_DOWN_KEYS:
             session.screen.scroll_down(3)
             context.area.tag_redraw()
+            return {"RUNNING_MODAL"}
+
+        # Only act on PRESS events for keys (not RELEASE / CLICK)
+        if event.value not in {"PRESS"}:
+            return {"PASS_THROUGH"}
+
+        # ── Copy / Paste ──────────────────────────────────────────────────
+        is_mac = sys.platform == "darwin"
+        
+        # COPY: Cmd+C (Mac) or Ctrl+Shift+C (Win/Linux)
+        is_copy = (event.type == "C" and 
+                   ((is_mac and event.oskey) or 
+                    (not is_mac and event.ctrl and event.shift)))
+        if is_copy:
+            # MVP: Copy the entire visible screen to clipboard
+            lines = session.screen.get_display_lines()
+            text = "\n".join("".join(char.char for char in line).rstrip() for line in lines)
+            # Remove trailing blank lines
+            text = text.rstrip() + "\n"
+            context.window_manager.clipboard = text
+            self.report({"INFO"}, "Terminal screen copied to clipboard")
+            return {"RUNNING_MODAL"}
+
+        # PASTE: Cmd+V (Mac) or Ctrl+Shift+V (Win/Linux)
+        is_paste = (event.type == "V" and 
+                    ((is_mac and event.oskey) or 
+                     (not is_mac and event.ctrl and event.shift)))
+        if is_paste:
+            text = context.window_manager.clipboard
+            if text:
+                # Send text directly, converting newlines to \r
+                session.send_input(text.replace("\n", "\r").encode("utf-8"))
             return {"RUNNING_MODAL"}
 
         # ── ESC — confirm close (don't accidentally close with ESC) ───────

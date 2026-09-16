@@ -27,6 +27,7 @@ _SUBMODULE_ORDER = [
     "src.core",
     "src.core.log",
     "src.core.events",
+    "src.core.ipc",
     "src.process",
     "src.process.discovery",
     "src.terminal",
@@ -110,12 +111,14 @@ def unregister() -> None:
     from .src.ui.terminal_draw import unregister_draw_handler
     from .src.terminal.manager import destroy_manager
     from .src.blender.props import unregister_props
+    from .src.core.ipc import stop_ipc_server
 
     log.info("Unregistering Blender Agent Terminal")
 
     unregister_pump_timer()
     unregister_draw_handler()
     destroy_manager()
+    stop_ipc_server()
     unregister_props()
 
     all_classes = PREF_CLASSES + OP_CLASSES + PANEL_CLASSES
