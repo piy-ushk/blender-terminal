@@ -565,6 +565,77 @@ class BAT_OT_update_extension(bpy.types.Operator):
         return {"FINISHED"}
 
 
+# ─── BAT_OT_toggle_terminal_window ────────────────────────────────────────────
+
+class BAT_OT_toggle_terminal_window(bpy.types.Operator):
+    """Open Agent Terminal in a new floating window"""
+    bl_idname = "bat.toggle_terminal_window"
+    bl_label = "Agent Terminal Window"
+    
+    def execute(self, context: bpy.types.Context):
+        # We need a new window. We can duplicate the current area.
+        old_windows = set(context.window_manager.windows)
+        
+        # Duplicate area to new window
+        bpy.ops.screen.area_dupli('EXEC_DEFAULT')
+        
+        # Find the new window
+        new_windows = set(context.window_manager.windows) - old_windows
+        if not new_windows:
+            self.report({"WARNING"}, "Failed to create new window")
+            return {"CANCELLED"}
+            
+        win = new_windows.pop()
+        
+        # Change area to TEXT_EDITOR
+        area = win.screen.areas[0]
+        area.type = "TEXT_EDITOR"
+        
+        # Open terminal in that area
+        override = context.copy()
+        override["window"] = win
+        override["screen"] = win.screen
+        override["area"] = area
+        
+        bpy.ops.bat.open_terminal(override)
+        
+        return {"FINISHED"}
+
+# ─── BAT_OT_create_workspace ──────────────────────────────────────────────────
+
+class BAT_OT_create_workspace(bpy.types.Operator):
+    """Create or switch to the Agent Terminal workspace"""
+    bl_idname = "bat.create_workspace"
+    bl_label = "Agent Terminal Workspace"
+    
+    def execute(self, context: bpy.types.Context):
+        ws_name = "Agent Terminal"
+        if ws_name not in bpy.data.workspaces:
+            # Create a new workspace by duplicating the current one
+            bpy.ops.workspace.add()
+            ws = context.window.workspace
+            ws.name = ws_name
+            
+            # Find the largest area and make it a TEXT_EDITOR
+            screen = ws.screens[0]
+            if screen.areas:
+                largest = max(screen.areas, key=lambda a: a.width * a.height)
+                largest.type = "TEXT_EDITOR"
+                
+                # We can't safely call open_terminal on a background screen if it expects to draw immediately,
+                # but since we just switched to it, we can use the current context's new area.
+                # Actually, the workspace switch might be deferred. 
+                # Let's tag the area to open a terminal.
+                override = context.copy()
+                override["area"] = largest
+                bpy.ops.bat.open_terminal(override)
+        else:
+            # Just switch to it
+            context.window.workspace = bpy.data.workspaces[ws_name]
+            
+        return {"FINISHED"}
+
+
 # ─── Registration ─────────────────────────────────────────────────────────────
 
 CLASSES = [
@@ -576,4 +647,6 @@ CLASSES = [
     BAT_OT_launch_agent,
     BAT_OT_update_extension,
     BAT_OT_input_modal,
+    BAT_OT_toggle_terminal_window,
+    BAT_OT_create_workspace,
 ]

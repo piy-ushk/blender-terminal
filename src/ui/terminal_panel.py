@@ -105,6 +105,17 @@ class BAT_PT_TerminalPanel(Panel):
                 col = layout.column(align=True)
                 col.prop(prefs, "font_size")
                 col.prop(prefs, "theme")
+                
+                # Expose Keymap
+                kc = context.window_manager.keyconfigs.user
+                if kc:
+                    km = kc.keymaps.get("Window")
+                    if km:
+                        kmi = km.keymap_items.get("bat.toggle_terminal_window")
+                        if kmi:
+                            col.separator()
+                            col.context_pointer_set("keymap", km)
+                            col.prop(kmi, "type", text="Hotkey", full_event=True)
             else:
                 layout.label(text="(Preferences not loaded)", icon="ERROR")
         except Exception as exc:

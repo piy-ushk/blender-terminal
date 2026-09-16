@@ -63,9 +63,30 @@ if "src" in sys.modules.get(_pkg_name() + ".src", object).__dict__ if _pkg_name(
     _reload_all()
 
 
-# ─── Blender registration ──────────────────────────────────────────────────────
+# ─── Keymaps & Menus ──────────────────────────────────────────────────────────
 
 import bpy
+
+_addon_keymaps = []
+
+def draw_window_menu(self, context):
+    layout = self.layout
+    layout.separator()
+    layout.operator("bat.toggle_terminal_window", icon='CONSOLE')
+    layout.operator("bat.create_workspace", icon='WORKSPACE')
+
+def register_keymaps():
+    wm = bpy.context.window_manager
+    if wm.keyconfigs.addon:
+        km = wm.keyconfigs.addon.keymaps.new(name='Window', space_type='EMPTY')
+        # Default hotkey: Cmd+T (Mac) / Win+T (Windows)
+        kmi = km.keymap_items.new('bat.toggle_terminal_window', 'T', 'PRESS', oskey=True)
+        _addon_keymaps.append((km, kmi))
+
+def unregister_keymaps():
+    for km, kmi in _addon_keymaps:
+        km.keymap_items.remove(kmi)
+    _addon_keymaps.clear()
 
 
 def register() -> None:
@@ -96,6 +117,8 @@ def register() -> None:
 
     register_props()
     register_pump_timer()
+    register_keymaps()
+    bpy.types.TOPBAR_MT_window.append(draw_window_menu)
 
     log.info("Blender Agent Terminal ready")
 
@@ -120,6 +143,8 @@ def unregister() -> None:
     destroy_manager()
     stop_ipc_server()
     unregister_props()
+    unregister_keymaps()
+    bpy.types.TOPBAR_MT_window.remove(draw_window_menu)
 
     all_classes = PREF_CLASSES + OP_CLASSES + PANEL_CLASSES
     for cls in reversed(all_classes):
