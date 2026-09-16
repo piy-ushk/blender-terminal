@@ -467,6 +467,50 @@ def _get_blend_dir(context: bpy.types.Context) -> str:
     return str(Path.home())
 
 
+# ─── BAT_OT_update_extension ──────────────────────────────────────────────────
+
+class BAT_OT_update_extension(bpy.types.Operator):
+    """Update Blender Agent Terminal from GitHub"""
+    bl_idname = "bat.update_extension"
+    bl_label = "Update Terminal"
+    bl_description = "Download and install the latest OTA update from GitHub"
+
+    def execute(self, context: bpy.types.Context):
+        import urllib.request
+        import zipfile
+        import tempfile
+        import shutil
+
+        url = "https://github.com/piy-ushk/blender-terminal/archive/refs/heads/main.zip"
+        pkg_path = Path(__file__).parent.parent.parent
+
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                zip_path = Path(tmpdir) / "update.zip"
+                urllib.request.urlretrieve(url, zip_path)
+                
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(tmpdir)
+                    
+                src_dir = Path(tmpdir) / "blender-terminal-main"
+                
+                # Copy files over, overwriting existing ones
+                for root, _, files in os.walk(src_dir):
+                    rel_path = os.path.relpath(root, src_dir)
+                    dst_dir = pkg_path / rel_path
+                    dst_dir.mkdir(parents=True, exist_ok=True)
+                    for f in files:
+                        shutil.copy2(os.path.join(root, f), dst_dir / f)
+
+            self.report({"INFO"}, "Update complete! Please RESTART Blender.")
+            
+        except Exception as e:
+            log.error("Update failed: %s", e)
+            self.report({"ERROR"}, f"Update failed: {e}")
+            
+        return {"FINISHED"}
+
+
 # ─── Registration ─────────────────────────────────────────────────────────────
 
 CLASSES = [
@@ -476,5 +520,6 @@ CLASSES = [
     BAT_OT_clear_terminal,
     BAT_OT_restart_session,
     BAT_OT_launch_agent,
+    BAT_OT_update_extension,
     BAT_OT_input_modal,
 ]

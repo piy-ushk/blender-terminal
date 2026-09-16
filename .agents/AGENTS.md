@@ -1,0 +1,1 @@
+After every updater weather it be majjor or minor/bug fix, automatically push it to git in batches, so if there are multiple files. commit multiple times with proper msg.

@@ -109,6 +109,9 @@ class BAT_PT_TerminalPanel(Panel):
                 layout.label(text="(Preferences not loaded)", icon="ERROR")
         except Exception as exc:
             layout.label(text=f"(Error: {exc})", icon="INFO")
+            
+        layout.separator()
+        layout.operator("bat.update_extension", icon="FILE_REFRESH")
 
 
 def _short_path(path: str, max_len: int = 28) -> str:
