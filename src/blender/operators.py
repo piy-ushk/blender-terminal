@@ -57,7 +57,7 @@ _KEY_TO_BYTES = {
 }
 
 # Keys that should trigger scroll (not sent to PTY)
-_SCROLL_UP_KEYS: Set[str] = {"WHEELUPMOUSE", "TRACKPADPAN"}
+_SCROLL_UP_KEYS: Set[str] = {"WHEELUPMOUSE"}
 _SCROLL_DOWN_KEYS: Set[str] = {"WHEELDOWNMOUSE"}
 
 
@@ -325,7 +325,10 @@ class BAT_OT_input_modal(bpy.types.Operator):
     _is_selecting: bool = False
 
     def invoke(self, context: bpy.types.Context, event):
+        # Flag it as active and focused
         context.window_manager.bat_input_active = True
+        context.window_manager.bat_terminal_active = True
+        context.window_manager.bat_terminal_focused = True
         self._is_selecting = False
         context.window_manager.modal_handler_add(self)
         log.debug("Input modal started")
@@ -333,11 +336,13 @@ class BAT_OT_input_modal(bpy.types.Operator):
 
     def modal(self, context: bpy.types.Context, event):
         wm = context.window_manager
-
-        # Stop if terminal was closed externally
-        if not wm.bat_terminal_active:
-            self._finish(context)
+        if not getattr(wm, "bat_terminal_active", False):
             return {"FINISHED"}
+
+        # Track terminal focus globally based on mouse clicks
+        if event.type == "LEFTMOUSE" and event.value == "PRESS":
+            is_over_term = (context.area and context.area.type == "TEXT_EDITOR")
+            wm.bat_terminal_focused = is_over_term
 
         # Only capture input when the cursor is over a TEXT_EDITOR area
         if not context.area or context.area.type != "TEXT_EDITOR":
@@ -354,15 +359,7 @@ class BAT_OT_input_modal(bpy.types.Operator):
         # ── Mouse Interaction (Scrolling & Selection) ─────────────────────
         if context.region and context.region.type == "WINDOW":
             if event.type in _SCROLL_UP_KEYS:
-                # Trackpad pan might be up or down
-                if event.type == "TRACKPADPAN":
-                    # Simple heuristic: positive Y means swipe down (scroll up)
-                    if event.mouse_prev_y < event.mouse_y:
-                        session.screen.scroll_up(3)
-                    elif event.mouse_prev_y > event.mouse_y:
-                        session.screen.scroll_down(3)
-                else:
-                    session.screen.scroll_up(3)
+                session.screen.scroll_up(3)
                 context.area.tag_redraw()
                 return {"PASS_THROUGH"}
 
@@ -437,14 +434,15 @@ class BAT_OT_input_modal(bpy.types.Operator):
             return {"RUNNING_MODAL"}
 
         # ── Regular key → PTY (Replaces local history) ─────────────────────
-        data = _event_to_bytes(event)
-        if data is not None:
-            session.send_input(data)
-            # Scroll back to bottom on any input
-            session.screen.scroll_to_bottom()
-            return {"RUNNING_MODAL"}
+        if getattr(wm, "bat_terminal_focused", True):
+            data = _event_to_bytes(event)
+            if data is not None:
+                session.send_input(data)
+                # Scroll back to bottom on any input
+                session.screen.scroll_to_bottom()
+                return {"RUNNING_MODAL"}
 
-        # Unknown key — pass through to Blender
+        # Unknown key or not focused — pass through to Blender
         return {"PASS_THROUGH"}
 
     def cancel(self, context: bpy.types.Context):

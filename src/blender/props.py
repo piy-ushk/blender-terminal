@@ -19,6 +19,12 @@ def register_props() -> None:
         default=False,
     )  # type: ignore
 
+    # Whether the terminal is currently focused for typing
+    wm.bat_terminal_focused = BoolProperty(
+        name="Terminal Focused",
+        default=True,
+    )  # type: ignore
+
     # ID of the currently displayed session
     wm.bat_session_id = StringProperty(
         name="Session ID",
@@ -41,7 +47,7 @@ def register_props() -> None:
 
 def unregister_props() -> None:
     wm = bpy.types.WindowManager
-    for attr in ("bat_terminal_active", "bat_session_id", "bat_input_line", "bat_input_active"):
+    for attr in ("bat_terminal_active", "bat_terminal_focused", "bat_session_id", "bat_input_line", "bat_input_active"):
         try:
             delattr(wm, attr)
         except AttributeError:
