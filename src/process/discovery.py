@@ -163,6 +163,11 @@ def get_user_env() -> Dict[str, str]:
             with open(wrap_path, "w") as f:
                 f.write(f'#!/bin/sh\nexec "{claude_path}" --system-prompt "{prompt_esc}" "$@"\n')
             os.chmod(wrap_path, os.stat(wrap_path).st_mode | stat.S_IEXEC)
+            
+            # Windows compatibility wrapper
+            wrap_cmd_path = os.path.join(bin_dir, "claude.cmd")
+            with open(wrap_cmd_path, "w") as f:
+                f.write(f'@echo off\r\n"{claude_path}" --system-prompt "{prompt_esc}" %*\r\n')
         
         # Prepend our bin_dir to PATH so bpy-exec and wrappers are immediately available
         env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"

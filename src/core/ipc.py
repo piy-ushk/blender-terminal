@@ -160,4 +160,9 @@ except Exception as e:
         f.write(script)
     os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC)
     
+    # Windows compatibility wrapper
+    cmd_path = os.path.join(bin_dir, "bpy-exec.cmd")
+    with open(cmd_path, "w") as f:
+        f.write('@echo off\r\npython "%~dp0\\bpy-exec" %*\r\n')
+    
     return bin_dir
