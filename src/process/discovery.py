@@ -141,7 +141,30 @@ def get_user_env() -> Dict[str, str]:
         bin_dir = generate_bpy_exec(port)
         
         env["BLENDER_IPC_PORT"] = str(port)
-        # Prepend our bin_dir to PATH so bpy-exec is immediately available
+        
+        # Inject agent wrappers to force system prompts
+        import bpy
+        import stat
+        blend_file = bpy.data.filepath
+        blend_dir = os.path.dirname(blend_file) if blend_file else "The current Blender file is not saved yet."
+        
+        prompt = (
+            "You are an AI assistant running inside a terminal directly embedded in Blender. "
+            "You have FULL access to Blender's Python API via the 'bpy-exec' command line tool. "
+            "Your primary goal is to help the user manipulate the 3D scene, UI, and objects. "
+            "Instead of telling the user how to do things, DO IT YOURSELF by running python scripts or 'bpy-exec \"...\"'. "
+            f"Restrict your workspace to this directory: {blend_dir}."
+        )
+        prompt_esc = prompt.replace('"', '\\"')
+        
+        claude_path = shutil.which("claude")
+        if claude_path and not claude_path.startswith(bin_dir):
+            wrap_path = os.path.join(bin_dir, "claude")
+            with open(wrap_path, "w") as f:
+                f.write(f'#!/bin/sh\nexec "{claude_path}" --system-prompt "{prompt_esc}" "$@"\n')
+            os.chmod(wrap_path, os.stat(wrap_path).st_mode | stat.S_IEXEC)
+        
+        # Prepend our bin_dir to PATH so bpy-exec and wrappers are immediately available
         env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
     except Exception as e:
         log.error("Failed to start IPC server: %s", e)

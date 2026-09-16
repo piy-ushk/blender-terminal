@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Optional, Set
 
 import bpy
-from bpy.props import BoolProperty, StringProperty
+from bpy.props import StringProperty
 
 from ..core.log import get_logger
 from ..process.discovery import find_executable, get_default_shell
@@ -322,7 +322,7 @@ class BAT_OT_input_modal(bpy.types.Operator):
     bl_label = "Terminal Input Modal"
     bl_options = {"INTERNAL"}
 
-    _is_selecting: BoolProperty(default=False)  # type: ignore
+    _is_selecting: bool = False
 
     def invoke(self, context: bpy.types.Context, event):
         context.window_manager.bat_input_active = True
