@@ -360,12 +360,8 @@ class BAT_OT_input_modal(bpy.types.Operator):
         if context.region and context.region.type == "WINDOW":
             if event.type in _SCROLL_UP_KEYS:
                 if event.type == "TRACKPADPAN":
-                    # In Blender, mouse_y increases as cursor moves up.
-                    # Pushing fingers up (page scroll down) increases Y -> scroll_down(3)
-                    if event.mouse_prev_y < event.mouse_y:
-                        session.screen.scroll_down(3)
-                    elif event.mouse_prev_y > event.mouse_y:
-                        session.screen.scroll_up(3)
+                    delta = event.mouse_y - event.mouse_prev_y
+                    session.screen.trackpad_scroll(delta)
                 else:
                     session.screen.scroll_up(3)
                 context.area.tag_redraw()

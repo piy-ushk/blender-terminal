@@ -134,6 +134,7 @@ class TerminalScreen:
         self._rows = rows
         self._max_scrollback = max_scrollback
         self._scroll_offset: int = 0  # lines scrolled up from bottom
+        self._trackpad_scroll_accum: float = 0.0
         self._lock = threading.Lock()
 
         # Text selection (col, row). (row is 0 at top of current display, NOT absolute history)
@@ -269,6 +270,23 @@ class TerminalScreen:
 
     def scroll_to_bottom(self) -> None:
         self._scroll_offset = 0
+        self._trackpad_scroll_accum = 0.0
+
+    def trackpad_scroll(self, delta: float) -> None:
+        """
+        Smooth trackpad scroll accumulation.
+        delta: Y pixel delta. Positive means cursor moved up (pushing page up).
+        """
+        sensitivity = 20.0
+        self._trackpad_scroll_accum += delta
+        
+        lines = int(self._trackpad_scroll_accum / sensitivity)
+        if lines != 0:
+            self._trackpad_scroll_accum -= lines * sensitivity
+            if lines > 0:
+                self.scroll_down(lines)
+            else:
+                self.scroll_up(-lines)
 
     @property
     def is_scrolled(self) -> bool:
