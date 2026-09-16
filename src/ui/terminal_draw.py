@@ -302,32 +302,8 @@ def _draw_terminal_impl() -> None:
     blf.position(_font_id, _PAD_X, 6, 0)
     blf.draw(_font_id, f"  {cmd_text}  │  {cwd_text}  │  {status_text}")
 
-    # ── Draw input bar (one row above status) ─────────────────────────────
-    input_bar_y = _STATUS_H
-    _draw_rect(0, input_bar_y, rw, char_h + _PAD_Y * 2, theme["inputbar_bg"])
-
-    input_text = wm.bat_input_line if hasattr(wm, "bat_input_line") else ""
-    blf.size(_font_id, scaled_font_size)
-    blf.color(_font_id, *theme["prompt"])
-    blf.position(_font_id, _PAD_X, input_bar_y + _PAD_Y + 1, 0)
-    blf.draw(_font_id, "❯ ")
-    prompt_w, _ = blf.dimensions(_font_id, "❯ ")
-
-    blf.color(_font_id, *theme["inputbar_fg"])
-    blf.position(_font_id, _PAD_X + prompt_w, input_bar_y + _PAD_Y + 1, 0)
-    blf.draw(_font_id, input_text)
-
-    # Input cursor blink
-    t = time.monotonic()
-    cursor_on = (int(t / (_CURSOR_BLINK_PERIOD / 2)) % 2) == 0
-    if cursor_on and wm.bat_input_active:
-        input_w, _ = blf.dimensions(_font_id, input_text) if input_text else (0.0, 0.0)
-        cx = _PAD_X + prompt_w + input_w
-        cy = input_bar_y + _PAD_Y
-        _draw_rect(cx, cy, max(2, char_w * 0.15), char_h, theme["cursor"])
-
     # ── Draw terminal screen buffer ────────────────────────────────────────
-    term_area_y = input_bar_y + char_h + _PAD_Y * 2
+    term_area_y = _STATUS_H
     term_area_h = rh - term_area_y
 
     lines = session.screen.get_display_lines()
@@ -347,14 +323,48 @@ def _draw_terminal_impl() -> None:
         # Render this line: batch same-color consecutive chars
         _render_line(line, y, char_w, char_h, scaled_font_size, _PAD_X)
 
+    # ── Draw text selection ────────────────────────────────────────────────
+    if session.screen.selection_start and session.screen.selection_end:
+        c1, r1 = session.screen.selection_start
+        c2, r2 = session.screen.selection_end
+        if r1 > r2 or (r1 == r2 and c1 > c2):
+            c1, r1, c2, r2 = c2, r2, c1, r1
+            
+        r1 = max(0, min(r1, len(lines) - 1))
+        r2 = max(0, min(r2, len(lines) - 1))
+        
+        selection_color = (0.2, 0.5, 0.9, 0.4)  # Semi-transparent blue
+        
+        for r in range(r1, r2 + 1):
+            line = lines[r]
+            start_col = c1 if r == r1 else 0
+            end_col = c2 + 1 if r == r2 else len(line)
+            
+            start_col = max(0, min(start_col, len(line)))
+            end_col = max(0, min(end_col, len(line)))
+            
+            if end_col > start_col:
+                sx = _PAD_X + start_col * char_w
+                sy = start_y - r * char_h
+                sw = (end_col - start_col) * char_w
+                _draw_rect(sx, sy, sw, char_h, selection_color)
+
     # ── Draw PTY cursor ────────────────────────────────────────────────────
-    if cursor_on and session.is_alive():
+    t = time.monotonic()
+    cursor_on = (int(t / (_CURSOR_BLINK_PERIOD / 2)) % 2) == 0
+    if cursor_on and session.is_alive() and wm.bat_input_active:
         cur_row = session.screen.cursor_row
         cur_col = session.screen.cursor_col
         cx = _PAD_X + cur_col * char_w
         cy = start_y - cur_row * char_h
         if cy >= term_area_y:
-            _draw_rect(cx, cy, char_w, char_h, theme["cursor"])
+            # Draw semi-transparent block cursor so text beneath is slightly visible
+            cursor_color = list(theme["cursor"])
+            if len(cursor_color) == 3:
+                cursor_color.append(0.6)
+            elif len(cursor_color) == 4:
+                cursor_color[3] = 0.6
+            _draw_rect(cx, cy, char_w, char_h, tuple(cursor_color))
 
 
 def _render_line(

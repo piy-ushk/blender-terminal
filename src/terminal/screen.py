@@ -137,6 +137,10 @@ class TerminalScreen:
         self._scroll_offset: int = 0  # lines scrolled up from bottom
         self._lock = threading.Lock()
 
+        # Text selection (col, row). (row is 0 at top of current display, NOT absolute history)
+        self.selection_start: Optional[Tuple[int, int]] = None
+        self.selection_end: Optional[Tuple[int, int]] = None
+
         self._init_pyte()
 
     def _init_pyte(self) -> None:
@@ -275,4 +279,45 @@ class TerminalScreen:
         """Clear the screen and scrollback."""
         self._scrollback = []
         self._scroll_offset = 0
+        self.clear_selection()
         self._init_pyte()
+
+    def get_selection_text(self) -> str:
+        """Returns the text currently selected by the user."""
+        if not self.selection_start or not self.selection_end:
+            return ""
+
+        c1, r1 = self.selection_start
+        c2, r2 = self.selection_end
+
+        # Normalize so (c1,r1) is before (c2,r2)
+        if r1 > r2 or (r1 == r2 and c1 > c2):
+            c1, r1, c2, r2 = c2, r2, c1, r1
+
+        lines = self.get_display_lines()
+        
+        # Clamp rows
+        r1 = max(0, min(r1, len(lines) - 1))
+        r2 = max(0, min(r2, len(lines) - 1))
+        
+        selected_text = []
+        for r in range(r1, r2 + 1):
+            line = lines[r]
+            start_col = c1 if r == r1 else 0
+            end_col = c2 + 1 if r == r2 else len(line)
+            
+            # Clamp columns
+            start_col = max(0, min(start_col, len(line)))
+            end_col = max(0, min(end_col, len(line)))
+            
+            line_str = "".join(char.char for char in line[start_col:end_col])
+            # Only right-strip if it's the end of a line being fully copied
+            if r != r2:
+                line_str = line_str.rstrip()
+            selected_text.append(line_str)
+
+        return "\n".join(selected_text)
+
+    def clear_selection(self) -> None:
+        self.selection_start = None
+        self.selection_end = None

@@ -57,7 +57,7 @@ _KEY_TO_BYTES = {
 }
 
 # Keys that should trigger scroll (not sent to PTY)
-_SCROLL_UP_KEYS: Set[str] = {"WHEELUPMOUSE"}
+_SCROLL_UP_KEYS: Set[str] = {"WHEELUPMOUSE", "TRACKPADPAN"}
 _SCROLL_DOWN_KEYS: Set[str] = {"WHEELDOWNMOUSE"}
 
 
@@ -322,8 +322,11 @@ class BAT_OT_input_modal(bpy.types.Operator):
     bl_label = "Terminal Input Modal"
     bl_options = {"INTERNAL"}
 
+    _is_selecting: BoolProperty(default=False)  # type: ignore
+
     def invoke(self, context: bpy.types.Context, event):
         context.window_manager.bat_input_active = True
+        self._is_selecting = False
         context.window_manager.modal_handler_add(self)
         log.debug("Input modal started")
         return {"RUNNING_MODAL"}
@@ -348,18 +351,50 @@ class BAT_OT_input_modal(bpy.types.Operator):
         if not session:
             return {"PASS_THROUGH"}
 
-        # ── Scroll wheel ──────────────────────────────────────────────────
-        if event.type in _SCROLL_UP_KEYS:
-            session.screen.scroll_up(3)
-            context.area.tag_redraw()
-            return {"RUNNING_MODAL"}
+        # ── Mouse Interaction (Scrolling & Selection) ─────────────────────
+        if context.region and context.region.type == "WINDOW":
+            if event.type in _SCROLL_UP_KEYS:
+                # Trackpad pan might be up or down
+                if event.type == "TRACKPADPAN":
+                    # Simple heuristic: positive Y means swipe down (scroll up)
+                    if event.mouse_prev_y < event.mouse_y:
+                        session.screen.scroll_up(3)
+                    elif event.mouse_prev_y > event.mouse_y:
+                        session.screen.scroll_down(3)
+                else:
+                    session.screen.scroll_up(3)
+                context.area.tag_redraw()
+                return {"RUNNING_MODAL"}
 
-        if event.type in _SCROLL_DOWN_KEYS:
-            session.screen.scroll_down(3)
-            context.area.tag_redraw()
-            return {"RUNNING_MODAL"}
+            if event.type in _SCROLL_DOWN_KEYS:
+                session.screen.scroll_down(3)
+                context.area.tag_redraw()
+                return {"RUNNING_MODAL"}
 
-        # Only act on PRESS events for keys (not RELEASE / CLICK)
+            # Text selection
+            if event.type == "LEFTMOUSE":
+                if event.value == "PRESS":
+                    self._is_selecting = True
+                    col, row = _mouse_to_col_row(context, event, session)
+                    session.screen.selection_start = (col, row)
+                    session.screen.selection_end = (col, row)
+                    context.area.tag_redraw()
+                    return {"RUNNING_MODAL"}
+                elif event.value == "RELEASE":
+                    if self._is_selecting:
+                        self._is_selecting = False
+                        col, row = _mouse_to_col_row(context, event, session)
+                        session.screen.selection_end = (col, row)
+                        context.area.tag_redraw()
+                    return {"RUNNING_MODAL"}
+
+            if event.type == "MOUSEMOVE" and self._is_selecting:
+                col, row = _mouse_to_col_row(context, event, session)
+                session.screen.selection_end = (col, row)
+                context.area.tag_redraw()
+                return {"RUNNING_MODAL"}
+
+        # Only act on PRESS events for keyboard keys
         if event.value not in {"PRESS"}:
             return {"PASS_THROUGH"}
 
@@ -371,13 +406,17 @@ class BAT_OT_input_modal(bpy.types.Operator):
                    ((is_mac and event.oskey) or 
                     (not is_mac and event.ctrl and event.shift)))
         if is_copy:
-            # MVP: Copy the entire visible screen to clipboard
-            lines = session.screen.get_display_lines()
-            text = "\n".join("".join(char.char for char in line).rstrip() for line in lines)
-            # Remove trailing blank lines
-            text = text.rstrip() + "\n"
-            context.window_manager.clipboard = text
-            self.report({"INFO"}, "Terminal screen copied to clipboard")
+            text = session.screen.get_selection_text()
+            if text:
+                context.window_manager.clipboard = text
+                self.report({"INFO"}, "Terminal selection copied to clipboard")
+            else:
+                # Fallback MVP: Copy the entire visible screen to clipboard
+                lines = session.screen.get_display_lines()
+                text = "\n".join("".join(char.char for char in line).rstrip() for line in lines)
+                text = text.rstrip() + "\n"
+                context.window_manager.clipboard = text
+                self.report({"INFO"}, "Terminal screen copied to clipboard")
             return {"RUNNING_MODAL"}
 
         # PASTE: Cmd+V (Mac) or Ctrl+Shift+V (Win/Linux)
@@ -397,20 +436,7 @@ class BAT_OT_input_modal(bpy.types.Operator):
             session.send_input(b"\x1b")
             return {"RUNNING_MODAL"}
 
-        # ── Arrow key history navigation (when not alive, just pass) ──────
-        if event.type == "UP_ARROW" and not event.ctrl:
-            prev = session.history_prev()
-            if prev is not None:
-                wm.bat_input_line = prev
-            return {"RUNNING_MODAL"}
-
-        if event.type == "DOWN_ARROW" and not event.ctrl:
-            nxt = session.history_next()
-            if nxt is not None:
-                wm.bat_input_line = nxt
-            return {"RUNNING_MODAL"}
-
-        # ── Regular key → PTY ─────────────────────────────────────────────
+        # ── Regular key → PTY (Replaces local history) ─────────────────────
         data = _event_to_bytes(event)
         if data is not None:
             session.send_input(data)
@@ -430,6 +456,34 @@ class BAT_OT_input_modal(bpy.types.Operator):
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
+
+def _mouse_to_col_row(context, event, session):
+    """Convert absolute screen coordinates to terminal (col, row)."""
+    try:
+        prefs = context.preferences.addons[__package__.split(".")[0]].preferences
+        font_size = prefs.font_size
+    except Exception:
+        font_size = 13
+        
+    char_w = font_size * 0.60
+    char_h = font_size * 1.40
+    
+    pad_x = 10
+    pad_y = 10
+    
+    x = event.mouse_region_x
+    y = event.mouse_region_y
+    region_h = context.region.height
+    
+    row = int((region_h - pad_y - y) / char_h)
+    col = int((x - pad_x) / char_w)
+    
+    # Include scroll offset so the selection maps to the visible line
+    row = max(0, min(row, session._rows - 1))
+    col = max(0, min(col, session._cols - 1))
+    
+    return col, row
+
 
 def _estimate_term_size(context: bpy.types.Context):
     """
