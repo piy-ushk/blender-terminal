@@ -119,6 +119,9 @@ class BAT_OT_open_terminal(bpy.types.Operator):
         default="",
     )  # type: ignore
 
+    def invoke(self, context: bpy.types.Context, event):
+        return self.execute(context)
+
     def execute(self, context: bpy.types.Context):
         from ..terminal.manager import ensure_manager
         from ..core.events import register_pump_timer
@@ -574,6 +577,9 @@ class BAT_OT_toggle_terminal_window(bpy.types.Operator):
     bl_idname = "bat.toggle_terminal_window"
     bl_label = "Agent Terminal Window"
     
+    def invoke(self, context: bpy.types.Context, event):
+        return self.execute(context)
+
     def execute(self, context: bpy.types.Context):
         old_windows = set(context.window_manager.windows)
         
