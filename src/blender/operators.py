@@ -645,6 +645,17 @@ class BAT_OT_create_workspace(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class BAT_OT_toggle_fullscreen(bpy.types.Operator):
+    """Toggle fullscreen view for the terminal"""
+    bl_idname = "bat.toggle_fullscreen"
+    bl_label = "Toggle Fullscreen"
+
+    def execute(self, context: bpy.types.Context):
+        # screen_full_area toggles the maximization of the area in the context
+        bpy.ops.screen.screen_full_area()
+        return {"FINISHED"}
+
+
 # ─── Registration ─────────────────────────────────────────────────────────────
 
 CLASSES = [
@@ -658,4 +669,5 @@ CLASSES = [
     BAT_OT_input_modal,
     BAT_OT_toggle_terminal_window,
     BAT_OT_create_workspace,
+    BAT_OT_toggle_fullscreen,
 ]

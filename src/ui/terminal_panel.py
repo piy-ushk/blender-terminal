@@ -7,97 +7,64 @@ launching agents, and adjusting settings.
 """
 
 import bpy
-from bpy.types import Panel
+from bpy.types import Menu, Panel
 
 from ..core.log import get_logger
-from ..process.discovery import detect_agents, get_agent_label
 
-log = get_logger("ui.terminal_panel")
-
-# Cache agent detection (re-probe every 60s via a simple counter)
-_agent_cache: dict = {}
-_agent_cache_frame: int = -9999
-_AGENT_CACHE_FRAMES = 300  # ~10 seconds at 30fps pumps
+log = get_logger("ui.terminal_menu")
 
 
-def _get_agents(context: bpy.types.Context) -> dict:
-    global _agent_cache, _agent_cache_frame
-    current = context.scene.frame_current if context.scene else 0
-    if abs(current - _agent_cache_frame) > _AGENT_CACHE_FRAMES or not _agent_cache:
-        _agent_cache = detect_agents()
-        _agent_cache_frame = current
-    return _agent_cache
-
-
-class BAT_PT_TerminalPanel(Panel):
-    """Blender Agent Terminal — sidebar control panel."""
-
+class BAT_MT_terminal_menu(Menu):
     bl_label = "Agent Terminal"
-    bl_idname = "BAT_PT_terminal_panel"
-    bl_space_type = "TEXT_EDITOR"
-    bl_region_type = "UI"
-    bl_category = "Terminal"
-    bl_options = {"DEFAULT_CLOSED"}
+    bl_idname = "BAT_MT_terminal_menu"
 
-    def draw(self, context: bpy.types.Context) -> None:
+    def draw(self, context: bpy.types.Context):
         layout = self.layout
         wm = context.window_manager
         active = getattr(wm, "bat_terminal_active", False)
 
-        # ── Main open/close button ─────────────────────────────────────────
         if not active:
-            row = layout.row()
-            row.scale_y = 1.6
-            row.operator(
-                "bat.open_terminal",
-                text="▶  Open Terminal",
-                icon="CONSOLE",
-            )
+            layout.operator("bat.open_terminal", text="Open Terminal", icon="CONSOLE")
         else:
-            # Controls while terminal is open
-            col = layout.column(align=True)
-            row = col.row(align=True)
-            row.scale_y = 1.2
-            row.operator("bat.kill_process",    text="Kill",    icon="X")
-            row.operator("bat.restart_session", text="Restart", icon="FILE_REFRESH")
-            row.operator("bat.clear_terminal",  text="Clear",   icon="TRASH")
-            row.operator("bat.close_terminal",  text="Close",   icon="PANEL_CLOSE")
-
-            # Session status
-            from ..terminal.manager import get_manager
-            manager = get_manager()
-            if manager:
-                session = manager.get_active()
-                if session:
-                    layout.separator(factor=0.5)
-                    box = layout.box()
-                    col2 = box.column(align=True)
-                    col2.scale_y = 0.8
-                    col2.label(text=f"Status: {session.status_label}", icon="INFO")
-                    col2.label(text=f"Cmd: {' '.join(session.cmd)}", icon="RIGHTARROW_THIN")
-                    col2.label(text=f"CWD: {_short_path(session.cwd)}", icon="FILE_FOLDER")
-
+            layout.operator("bat.close_terminal", text="Close Terminal", icon="PANEL_CLOSE")
+            layout.operator("bat.toggle_fullscreen", text="Toggle Fullscreen", icon="FULLSCREEN_ENTER")
+            layout.separator()
+            layout.operator("bat.restart_session", text="Restart Process", icon="FILE_REFRESH")
+            layout.operator("bat.clear_terminal", text="Clear Screen", icon="TRASH")
+            layout.operator("bat.kill_process", text="Kill Process", icon="X")
+        
         layout.separator()
-
-        # ── Quick-launch agent buttons ─────────────────────────────────────
-        layout.label(text="Quick Launch:", icon="TOOL_SETTINGS")
-        agents = _get_agents(context)
-
-        grid = layout.grid_flow(row_major=True, columns=2, even_columns=True, align=True)
-        for agent_key, agent_path in agents.items():
-            btn = grid.column()
-            btn.enabled = bool(agent_path)
-            op = btn.operator(
-                "bat.launch_agent",
-                text=agent_key,
-                icon="CONSOLE" if agent_path else "ERROR",
-            )
-            op.agent = agent_key
-
+        layout.operator("bat.update_extension", text="Sync Updates", icon="FILE_REFRESH")
+        
         layout.separator()
+        layout.menu("BAT_MT_terminal_usage", text="Usage", icon="QUESTION")
+        layout.popover("BAT_PT_terminal_settings", text="Settings")
 
-        # ── Settings shortcut ─────────────────────────────────────────────
-        layout.label(text="Settings:", icon="PREFERENCES")
+
+class BAT_MT_terminal_usage(Menu):
+    bl_label = "Terminal Usage"
+    bl_idname = "BAT_MT_terminal_usage"
+
+    def draw(self, context: bpy.types.Context):
+        layout = self.layout
+        layout.label(text="Click inside the terminal to focus and type.", icon="MOUSE_LMB")
+        layout.separator()
+        layout.label(text="Cmd+T / Ctrl+T — Toggle floating window")
+        layout.label(text="Ctrl+C — Interrupt process")
+        layout.label(text="Ctrl+D — Send EOF")
+        layout.label(text="Ctrl+L — Clear screen")
+        layout.label(text="↑ / ↓ — Command history")
+        layout.label(text="Scroll — View scrollback")
+
+
+class BAT_PT_terminal_settings(Panel):
+    bl_label = "Terminal Settings"
+    bl_idname = "BAT_PT_terminal_settings"
+    bl_space_type = "TEXT_EDITOR"
+    bl_region_type = "HEADER"
+
+    def draw(self, context: bpy.types.Context):
+        layout = self.layout
         try:
             from ..blender.preferences import get_prefs
             prefs = get_prefs(context)
@@ -120,44 +87,12 @@ class BAT_PT_TerminalPanel(Panel):
                 layout.label(text="(Preferences not loaded)", icon="ERROR")
         except Exception as exc:
             layout.label(text=f"(Error: {exc})", icon="INFO")
-            
-        layout.separator()
-        layout.operator("bat.update_extension", icon="FILE_REFRESH")
 
 
-def _short_path(path: str, max_len: int = 28) -> str:
-    if len(path) <= max_len:
-        return path
-    return "…" + path[-(max_len - 1):]
+def draw_header_menu(self, context: bpy.types.Context):
+    # Appended to TEXT_HT_header
+    self.layout.separator()
+    self.layout.menu("BAT_MT_terminal_menu", text="Agent Terminal", icon="CONSOLE")
 
 
-class BAT_PT_TerminalHelpPanel(Panel):
-    """Help / usage instructions sub-panel."""
-
-    bl_label = "Usage"
-    bl_idname = "BAT_PT_terminal_help"
-    bl_space_type = "TEXT_EDITOR"
-    bl_region_type = "UI"
-    bl_category = "Terminal"
-    bl_options = {"DEFAULT_CLOSED"}
-    bl_parent_id = "BAT_PT_terminal_panel"
-
-    def draw(self, context: bpy.types.Context) -> None:
-        layout = self.layout
-        layout.scale_y = 0.85
-
-        col = layout.column(align=True)
-        col.label(text="1. Switch an area to Text Editor", icon="RIGHTARROW_THIN")
-        col.label(text="2. Open the N-panel sidebar (N key)", icon="RIGHTARROW_THIN")
-        col.label(text="3. Click 'Open Terminal'", icon="RIGHTARROW_THIN")
-        col.separator(factor=0.5)
-        col.label(text="Keyboard shortcuts (in terminal area):")
-        col.label(text="  Ctrl+C — interrupt process")
-        col.label(text="  Ctrl+D — send EOF")
-        col.label(text="  Ctrl+L — clear screen")
-        col.label(text="  ↑ / ↓  — command history")
-        col.label(text="  Scroll wheel — scrollback")
-        col.label(text="  ESC — send escape to process")
-
-
-CLASSES = [BAT_PT_TerminalPanel, BAT_PT_TerminalHelpPanel]
+CLASSES = [BAT_MT_terminal_menu, BAT_MT_terminal_usage, BAT_PT_terminal_settings]

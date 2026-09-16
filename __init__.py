@@ -97,7 +97,7 @@ def register() -> None:
     from .src.blender.props import register_props
     from .src.blender.preferences import CLASSES as PREF_CLASSES
     from .src.blender.operators import CLASSES as OP_CLASSES
-    from .src.ui.terminal_panel import CLASSES as PANEL_CLASSES
+    from .src.ui.terminal_panel import CLASSES as PANEL_CLASSES, draw_header_menu
     from .src.core.events import register_pump_timer
 
     all_classes = PREF_CLASSES + OP_CLASSES + PANEL_CLASSES
@@ -119,6 +119,7 @@ def register() -> None:
     register_pump_timer()
     register_keymaps()
     bpy.types.TOPBAR_MT_window.append(draw_window_menu)
+    bpy.types.TEXT_HT_header.append(draw_header_menu)
 
     log.info("Blender Agent Terminal ready")
 
@@ -134,6 +135,7 @@ def unregister() -> None:
     from .src.ui.terminal_draw import unregister_draw_handler
     from .src.terminal.manager import destroy_manager
     from .src.blender.props import unregister_props
+    from .src.ui.terminal_panel import draw_header_menu
     from .src.core.ipc import stop_ipc_server
 
     log.info("Unregistering Blender Agent Terminal")
@@ -145,6 +147,11 @@ def unregister() -> None:
     unregister_props()
     unregister_keymaps()
     bpy.types.TOPBAR_MT_window.remove(draw_window_menu)
+    
+    try:
+        bpy.types.TEXT_HT_header.remove(draw_header_menu)
+    except ValueError:
+        pass
 
     all_classes = PREF_CLASSES + OP_CLASSES + PANEL_CLASSES
     for cls in reversed(all_classes):
