@@ -44,11 +44,9 @@ _char_w: float = 8.0          # character cell width in pixels
 _char_h: float = 16.0         # character cell height in pixels
 
 # Terminal padding (pixels)
-_PAD_X = 8
-_PAD_Y = 4
-
-# Status bar height
-_STATUS_H = 22
+_FONT_H_FACTOR = 1.6
+_PAD_X = 12
+_PAD_Y = 12
 
 # Cursor blink period in seconds
 _CURSOR_BLINK_PERIOD = 1.0
@@ -279,7 +277,7 @@ def _draw_terminal_impl() -> None:
 
     # Update session terminal size if area has changed significantly
     cols = max(10, int((rw - _PAD_X * 2) / char_w))
-    rows = max(5, int((rh - _PAD_Y * 2 - _STATUS_H - char_h) / char_h))
+    rows = max(5, int((rh - _PAD_Y * 2 - char_h) / char_h))
     if cols != session.screen.cols or rows != session.screen.rows:
         session.resize(cols, rows)
 
@@ -289,22 +287,9 @@ def _draw_terminal_impl() -> None:
     # ── Draw background ────────────────────────────────────────────────────
     _draw_rect(0, 0, rw, rh, theme["bg"])
 
-    # ── Draw status bar (bottom strip) ────────────────────────────────────
-    _draw_rect(0, 0, rw, _STATUS_H, theme["statusbar_bg"])
-
-    # Status text
-    status_text = session.status_label
-    cmd_text = " ".join(session.cmd) if session.cmd else "—"
-    cwd_text = _truncate_path(session.cwd, max_len=40)
-
-    blf.size(_font_id, int(11 * ui_scale))
-    blf.color(_font_id, *theme["statusbar_fg"])
-    blf.position(_font_id, _PAD_X, 6, 0)
-    blf.draw(_font_id, f"  {cmd_text}  │  {cwd_text}  │  {status_text}")
-
     # ── Draw terminal screen buffer ────────────────────────────────────────
-    term_area_y = _STATUS_H
-    term_area_h = rh - term_area_y
+    term_area_y = 0
+    term_area_h = rh
 
     lines = session.screen.get_display_lines()
 
@@ -316,7 +301,7 @@ def _draw_terminal_impl() -> None:
     for row_idx, line in enumerate(lines):
         y = start_y - row_idx * char_h
 
-        # Skip rows below the input bar
+        # Skip rows below the visible area
         if y < term_area_y:
             break
 

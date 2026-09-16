@@ -167,6 +167,29 @@ class TerminalScreen:
 
     def resize(self, cols: int, rows: int) -> None:
         """Resize the pyte screen. Called when the Blender area resizes."""
+        if cols == self._cols and rows == self._rows:
+            return
+
+        old_rows = self._rows
+        diff = old_rows - rows
+
+        if getattr(self._screen, "history", None) is not None:
+            if diff > 0:
+                # Shrinking: push top lines to history
+                for y in range(diff):
+                    if y in self._screen.buffer:
+                        self._screen.history.top.append(self._screen.buffer[y].copy())
+            elif diff < 0:
+                # Expanding: pull lines from history
+                pull_count = min(-diff, len(self._screen.history.top))
+                if pull_count > 0:
+                    for y in range(old_rows - 1, -1, -1):
+                        if y in self._screen.buffer:
+                            self._screen.buffer[y + pull_count] = self._screen.buffer.pop(y)
+                    for y in range(pull_count - 1, -1, -1):
+                        self._screen.buffer[y] = self._screen.history.top.pop()
+                    self._screen.cursor.y += pull_count
+
         self._cols = cols
         self._rows = rows
         try:

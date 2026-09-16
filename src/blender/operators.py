@@ -57,7 +57,7 @@ _KEY_TO_BYTES = {
 }
 
 # Keys that should trigger scroll (not sent to PTY)
-_SCROLL_UP_KEYS: Set[str] = {"WHEELUPMOUSE"}
+_SCROLL_UP_KEYS: Set[str] = {"WHEELUPMOUSE", "TRACKPADPAN"}
 _SCROLL_DOWN_KEYS: Set[str] = {"WHEELDOWNMOUSE"}
 
 
@@ -359,7 +359,15 @@ class BAT_OT_input_modal(bpy.types.Operator):
         # ── Mouse Interaction (Scrolling & Selection) ─────────────────────
         if context.region and context.region.type == "WINDOW":
             if event.type in _SCROLL_UP_KEYS:
-                session.screen.scroll_up(3)
+                if event.type == "TRACKPADPAN":
+                    # In Blender, mouse_y increases as cursor moves up.
+                    # Pushing fingers up (page scroll down) increases Y -> scroll_down(3)
+                    if event.mouse_prev_y < event.mouse_y:
+                        session.screen.scroll_down(3)
+                    elif event.mouse_prev_y > event.mouse_y:
+                        session.screen.scroll_up(3)
+                else:
+                    session.screen.scroll_up(3)
                 context.area.tag_redraw()
                 return {"PASS_THROUGH"}
 
