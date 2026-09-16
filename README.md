@@ -157,9 +157,3 @@ Bundled dependencies:
 - **JetBrains Mono** — OFL-1.1 — [jetbrains.com/lp/mono](https://www.jetbrains.com/lp/mono/)
 
 ---
-
-## Roadmap
-
-- [x] **MVP #1** — Basic terminal, PTY, pyte emulation, async architecture
-- [ ] **MVP #2** — Persistent sessions, multiple tabs, copy/paste, themes
-- [ ] **Stage 3** — Agent convenience (1-click Claude/Gemini launch, scene context)
