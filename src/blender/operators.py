@@ -341,7 +341,7 @@ class BAT_OT_input_modal(bpy.types.Operator):
 
         # Track terminal focus globally based on mouse clicks
         if event.type == "LEFTMOUSE" and event.value == "PRESS":
-            is_over_term = (context.area and context.area.type == "TEXT_EDITOR")
+            is_over_term = bool(context.area and context.area.type == "TEXT_EDITOR")
             wm.bat_terminal_focused = is_over_term
 
         # Only capture input when the cursor is over a TEXT_EDITOR area
