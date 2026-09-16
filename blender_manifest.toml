@@ -22,4 +22,4 @@ wheels = [
 ]
 
 # Target platforms — Blender uses "os-arch" string format
-platforms = ["macos-arm64", "macos-x86_64", "linux-x86_64", "windows-x86_64"]
+platforms = ["macos-arm64", "macos-x64", "linux-x64", "windows-x64"]
