@@ -133,7 +133,6 @@ class TerminalScreen:
         self._cols = cols
         self._rows = rows
         self._max_scrollback = max_scrollback
-        self._scrollback: List[RenderedLine] = []
         self._scroll_offset: int = 0  # lines scrolled up from bottom
         self._lock = threading.Lock()
 
@@ -153,9 +152,9 @@ class TerminalScreen:
 
     def _init_pyte(self) -> None:
         import pyte
-        self._screen = pyte.Screen(self._cols, self._rows)
+        self._screen = pyte.HistoryScreen(self._cols, self._rows, history=self._max_scrollback)
         self._stream = pyte.ByteStream(self._screen)
-        log.debug("pyte screen initialized (%d×%d)", self._cols, self._rows)
+        log.debug("pyte history screen initialized (%d×%d)", self._cols, self._rows)
 
     def feed(self, data: bytes) -> None:
         """Feed raw PTY bytes into pyte. Called on the main thread."""
@@ -163,9 +162,6 @@ class TerminalScreen:
             return
         try:
             self._stream.feed(data)
-            # Snapshot any lines that have scrolled off the top into scrollback
-            # pyte.Screen.dirty tracks changed lines; history is in screen.history
-            self._sync_scrollback()
         except Exception as exc:
             log.debug("pyte feed error: %s", exc)
 
@@ -178,36 +174,6 @@ class TerminalScreen:
             log.debug("pyte screen resized to %d×%d", cols, rows)
         except Exception as exc:
             log.debug("pyte resize error: %s", exc)
-
-    def _sync_scrollback(self) -> None:
-        """
-        pyte.Screen maintains a history deque internally (screen.history).
-        We copy any new history lines into our own scrollback list.
-        """
-        history = self._screen.history
-        if history is None:
-            return
-        # history has .top (deque) and .bottom (deque) for alternate screen
-        top = list(history.top)
-        new_count = len(top) - (len(self._scrollback))
-        if new_count > 0:
-            for raw_line in top[-new_count:]:
-                rendered = self._render_history_line(raw_line)
-                self._scrollback.append(rendered)
-            # Trim to max
-            if len(self._scrollback) > self._max_scrollback:
-                self._scrollback = self._scrollback[-self._max_scrollback:]
-
-    def _render_history_line(self, raw_line) -> RenderedLine:
-        """Convert a pyte history line (dict of col→Char) to RenderedLine."""
-        line: RenderedLine = []
-        for col in range(self._cols):
-            char = raw_line.get(col)
-            if char is None:
-                line.append(RenderedChar())
-            else:
-                line.append(self._pyte_char_to_rendered(char))
-        return line
 
     def _pyte_char_to_rendered(self, char) -> RenderedChar:
         """Convert a pyte.screens.Char to our RenderedChar."""
@@ -229,28 +195,31 @@ class TerminalScreen:
         Return the lines currently visible on screen, accounting for
         scroll offset. Also returns scrollback context above the screen.
         """
-        # Build screen rows
+        top = list(self._screen.history.top) if getattr(self._screen, "history", None) else []
+        
+        # Build the full raw lines array
+        raw_lines = top + [self._screen.buffer[r] for r in range(self._rows)]
+        
+        # Slice the visible window
+        start_idx = len(raw_lines) - self._rows - self._scroll_offset
+        start_idx = max(0, start_idx)
+        end_idx = start_idx + self._rows
+        
+        visible_raw = raw_lines[start_idx:end_idx]
+        
+        # Parse into RenderedLine
         screen_lines: List[RenderedLine] = []
-        for row_idx in range(self._rows):
-            row = self._screen.buffer[row_idx]
+        for raw_line in visible_raw:
             line: RenderedLine = []
             for col_idx in range(self._cols):
-                char = row.get(col_idx)
+                char = raw_line.get(col_idx)
                 if char is None:
                     line.append(RenderedChar())
                 else:
                     line.append(self._pyte_char_to_rendered(char))
             screen_lines.append(line)
-
-        if self._scroll_offset == 0:
-            return screen_lines
-
-        # Include scrollback lines above
-        scrollback_slice = self._scrollback[
-            max(0, len(self._scrollback) - self._scroll_offset):
-        ]
-        combined = scrollback_slice + screen_lines
-        return combined[:self._rows]  # only return rows-worth of lines
+            
+        return screen_lines
 
     @property
     def cursor_row(self) -> int:
@@ -269,9 +238,8 @@ class TerminalScreen:
         return self._rows
 
     def scroll_up(self, lines: int = 3) -> None:
-        self._scroll_offset = min(
-            self._scroll_offset + lines, len(self._scrollback)
-        )
+        top_len = len(self._screen.history.top) if getattr(self._screen, "history", None) else 0
+        self._scroll_offset = min(self._scroll_offset + lines, top_len)
 
     def scroll_down(self, lines: int = 3) -> None:
         self._scroll_offset = max(0, self._scroll_offset - lines)
@@ -285,7 +253,6 @@ class TerminalScreen:
 
     def clear(self) -> None:
         """Clear the screen and scrollback."""
-        self._scrollback = []
         self._scroll_offset = 0
         self.clear_selection()
         self._init_pyte()
