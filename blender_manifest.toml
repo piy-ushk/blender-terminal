@@ -3,7 +3,7 @@ schema_version = "1.0.0"
 id = "blender_agent_terminal"
 version = "1.0.0"
 name = "Blender Agent Terminal"
-tagline = "Integrated interactive terminal — run Claude, Gemini CLI, npm, git inside Blender"
+tagline = "Interactive terminal for Claude, Gemini, npm & git in Blender"
 maintainer = "Blender Agent Terminal Contributors"
 type = "add-on"
 
