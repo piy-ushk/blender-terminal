@@ -575,10 +575,21 @@ class BAT_OT_toggle_terminal_window(bpy.types.Operator):
     def execute(self, context: bpy.types.Context):
         # We need a new window. We can duplicate the current area.
         old_windows = set(context.window_manager.windows)
+        # We need a valid area to duplicate. If invoked from top menu, context.area might be None or TOPBAR
+        target_area = context.area
+        if not target_area or target_area.type == "TOPBAR":
+            if context.screen and context.screen.areas:
+                target_area = max(context.screen.areas, key=lambda a: a.width * a.height)
+                
+        if not target_area:
+            self.report({"WARNING"}, "No valid area to duplicate")
+            return {"CANCELLED"}
+            
+        dup_override = context.copy()
+        dup_override["area"] = target_area
         
         # Duplicate area to new window
-        bpy.ops.screen.area_dupli('EXEC_DEFAULT')
-        
+        bpy.ops.screen.area_dupli(dup_override, 'EXEC_DEFAULT')
         # Find the new window
         new_windows = set(context.window_manager.windows) - old_windows
         if not new_windows:
