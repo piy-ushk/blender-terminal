@@ -1,20 +1,19 @@
-# Blender Agent Terminal
+# Blender Interactive Terminal
 
 **An integrated, interactive terminal inside Blender's UI.**
 
-Run Claude Code, Gemini CLI, OpenAI Codex, npm, git, bash — any CLI tool — in a real terminal panel embedded inside Blender, while your 3D viewport stays fully responsive.
+Run python scripts, npm, git, bash — any CLI tool — in a real terminal panel embedded inside Blender, while your 3D viewport stays fully responsive.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ Blender                                                     │
 │                     3D VIEWPORT                             │
 ├─────────────────────────────────────────────────────────────┤
-│ BLENDER AGENT TERMINAL                      [N-panel]       │
+│ BLENDER INTERACTIVE TERMINAL                [N-panel]       │
 │                                                             │
-│ $ claude                                                    │
-│ > Create a futuristic sci-fi spaceship                      │
+│ $ python script.py                                          │
+│ > Generating mesh geometry...                               │
 │                                                             │
-│ Claude:                                                     │
 │ ✓ Inspecting Blender scene                                  │
 │ ✓ Creating hull                                             │
 │ → Adding engines...                                         │
@@ -38,7 +37,7 @@ Run Claude Code, Gemini CLI, OpenAI Codex, npm, git, bash — any CLI tool — i
 1. Download the `.zip` release from GitHub (or build from source below).
 2. In Blender: **Edit → Preferences → Extensions → Install from Disk**.
 3. Select the `.zip` file.
-4. Enable **Blender Agent Terminal** in the Extensions list.
+4. Enable **Blender Interactive Terminal** in the Extensions list.
 
 ### Build from Source
 
@@ -51,7 +50,7 @@ python3 -m pip download pyte==0.8.0 --no-deps -d ./wheels/
 python3 -m pip download wcwidth --no-deps -d ./wheels/
 
 # Package as zip
-zip -r blender_agent_terminal.zip . \
+zip -r blender_interactive_terminal.zip . \
   --exclude "*.git*" --exclude "__pycache__/*" --exclude "*.pyc" \
   --exclude "tests/*" --exclude "docs/*"
 ```
@@ -126,7 +125,7 @@ blf.draw() per row/col     ← JetBrains Mono font
 
 ## Configuration
 
-In **Preferences → Extensions → Blender Agent Terminal**:
+In **Preferences → Extensions → Blender Interactive Terminal**:
 - **Font Size** — terminal font size (8–32pt)
 - **Color Theme** — Dark / Dracula / Solarized Dark / Light
 - **Default Shell** — override auto-detected shell

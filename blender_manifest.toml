@@ -1,10 +1,10 @@
 schema_version = "1.0.0"
 
-id = "blender_agent_terminal"
+id = "blender_interactive_terminal"
 version = "1.0.0"
-name = "Blender Agent Terminal"
-tagline = "Interactive terminal for Claude, Gemini, npm & git in Blender"
-maintainer = "Blender Agent Terminal Contributors"
+name = "Blender Interactive Terminal"
+tagline = "A native, interactive VT100 terminal emulator for the Blender UI"
+maintainer = "Blender Interactive Terminal Contributors"
 type = "add-on"
 
 website = "https://github.com/piyushk/blender-terminal"
