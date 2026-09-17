@@ -1,5 +1,5 @@
 """
-Blender Agent Terminal — Unix PTY Backend (macOS + Linux)
+Blender Interactive Terminal — Unix PTY Backend (macOS + Linux)
 
 Uses the Python stdlib `pty` module to open a master/slave pseudo-terminal
 pair, spawns the child process attached to the slave end, and reads output

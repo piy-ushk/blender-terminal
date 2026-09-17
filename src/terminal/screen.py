@@ -1,5 +1,5 @@
 """
-Blender Agent Terminal — Terminal Screen (pyte wrapper + scrollback)
+Blender Interactive Terminal — Terminal Screen (pyte wrapper + scrollback)
 
 Wraps pyte.Screen and pyte.ByteStream to provide:
   - In-memory terminal emulation (ANSI, VT100/220/520, colors, cursor)

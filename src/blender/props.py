@@ -1,5 +1,5 @@
 """
-Blender Agent Terminal — WindowManager Custom Properties
+Blender Interactive Terminal — WindowManager Custom Properties
 
 These properties live on the WindowManager so they persist for the
 lifetime of a Blender session but are not saved to .blend files.

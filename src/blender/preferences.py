@@ -1,5 +1,5 @@
 """
-Blender Agent Terminal — Add-on Preferences
+Blender Interactive Terminal — Add-on Preferences
 
 Stored in Blender's user preferences (auto-saved with .blend).
 Access: context.preferences.addons[__package__].preferences
@@ -13,7 +13,7 @@ def get_addon_name() -> str:
     pkg = __package__
     if pkg and pkg.startswith("bl_ext."):
         return ".".join(pkg.split(".")[:3])
-    return pkg.split(".")[0] if pkg else "blender_agent_terminal"
+    return pkg.split(".")[0] if pkg else "blender_interactive_terminal"
 
 
 class BATAddonPreferences(bpy.types.AddonPreferences):

@@ -1,5 +1,5 @@
 """
-Blender Agent Terminal — Terminal Session
+Blender Interactive Terminal — Terminal Session
 
 A TerminalSession ties together:
   - A platform-appropriate TerminalBackend (PTY/ConPTY)

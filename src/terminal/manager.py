@@ -1,5 +1,5 @@
 """
-Blender Agent Terminal — Terminal Manager (Singleton)
+Blender Interactive Terminal — Terminal Manager (Singleton)
 
 Owns all active TerminalSession instances and provides the single
 authoritative reference point for the Blender operator/UI layer.

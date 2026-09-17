@@ -1,5 +1,5 @@
 """
-Blender Agent Terminal — Event / Output Queue & Timer Pump
+Blender Interactive Terminal — Event / Output Queue & Timer Pump
 
 Architecture:
   Reader thread  →  OutputQueue (deque + lock)

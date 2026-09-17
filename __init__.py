@@ -1,9 +1,9 @@
 """
-Blender Agent Terminal — Extension Entry Point
+Blender Interactive Terminal — Extension Entry Point
 ==============================================
 An integrated, interactive terminal inside Blender's UI.
 
-Launch Claude Code, Gemini CLI, Codex, npm, git, bash and any other
+Launch npm, git, bash, python scripts and any other
 CLI tool in a terminal panel embedded right inside Blender — while your
 3D viewport stays fully responsive.
 
@@ -102,7 +102,7 @@ def register() -> None:
 
     all_classes = PREF_CLASSES + OP_CLASSES + PANEL_CLASSES
 
-    log.info("Registering Blender Agent Terminal")
+    log.info("Registering Blender Interactive Terminal")
 
     for cls in all_classes:
         try:
@@ -121,7 +121,7 @@ def register() -> None:
     bpy.types.TOPBAR_MT_window.append(draw_window_menu)
     bpy.types.TEXT_HT_header.append(draw_header_menu)
 
-    log.info("Blender Agent Terminal ready")
+    log.info("Blender Interactive Terminal ready")
 
 
 def unregister() -> None:
@@ -138,7 +138,7 @@ def unregister() -> None:
     from .src.ui.terminal_panel import draw_header_menu
     from .src.core.ipc import stop_ipc_server
 
-    log.info("Unregistering Blender Agent Terminal")
+    log.info("Unregistering Blender Interactive Terminal")
 
     unregister_pump_timer()
     unregister_draw_handler()
@@ -160,4 +160,4 @@ def unregister() -> None:
         except Exception as exc:
             log.debug("Unregister %s: %s", cls.__name__, exc)
 
-    log.info("Blender Agent Terminal unregistered")
+    log.info("Blender Interactive Terminal unregistered")

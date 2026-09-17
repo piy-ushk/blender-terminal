@@ -1,9 +1,9 @@
 """
-Blender Agent Terminal — Sidebar Panel
+Blender Interactive Terminal — Sidebar Panel
 
 Renders the control panel in the TEXT_EDITOR N-panel sidebar.
 This is the user's primary interface for opening/closing the terminal,
-launching agents, and adjusting settings.
+launching tools, and adjusting settings.
 """
 
 import bpy
@@ -15,7 +15,7 @@ log = get_logger("ui.terminal_menu")
 
 
 class BAT_MT_terminal_menu(Menu):
-    bl_label = "Agent Terminal"
+    bl_label = "Interactive Terminal"
     bl_idname = "BAT_MT_terminal_menu"
 
     def draw(self, context: bpy.types.Context):
@@ -92,7 +92,7 @@ class BAT_PT_terminal_settings(Panel):
 def draw_header_menu(self, context: bpy.types.Context):
     # Appended to TEXT_HT_header
     self.layout.separator()
-    self.layout.menu("BAT_MT_terminal_menu", text="Agent Terminal", icon="CONSOLE")
+    self.layout.menu("BAT_MT_terminal_menu", text="Interactive Terminal", icon="CONSOLE")
 
 
 CLASSES = [BAT_MT_terminal_menu, BAT_MT_terminal_usage, BAT_PT_terminal_settings]

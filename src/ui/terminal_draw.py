@@ -1,5 +1,5 @@
 """
-Blender Agent Terminal — GPU + BLF Draw Handler
+Blender Interactive Terminal — GPU + BLF Draw Handler
 
 Renders the terminal screen buffer directly into the TEXT_EDITOR area's
 WINDOW region using Blender's GPU and BLF (font) APIs.

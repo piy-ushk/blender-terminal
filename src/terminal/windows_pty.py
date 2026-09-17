@@ -1,5 +1,5 @@
 """
-Blender Agent Terminal — Windows PTY Backend (ConPTY via pywinpty)
+Blender Interactive Terminal — Windows PTY Backend (ConPTY via pywinpty)
 
 This module handles the Windows ConPTY backend using the pywinpty library.
 pywinpty wraps the Windows ConPTY API which was introduced in Windows 10 1809.

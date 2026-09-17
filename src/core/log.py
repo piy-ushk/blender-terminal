@@ -1,5 +1,5 @@
 """
-Blender Agent Terminal — Logging
+Blender Interactive Terminal — Logging
 Thin wrapper around Python logging with a consistent prefix.
 """
 

@@ -1,5 +1,5 @@
 """
-Blender Agent Terminal — Operators
+Blender Interactive Terminal — Operators
 
 All Blender operators for the terminal. Operators are the only
 safe way to interact with bpy from user-initiated actions.
@@ -11,7 +11,7 @@ Operators defined here:
   BAT_OT_clear_terminal   — clear screen + scrollback
   BAT_OT_restart_session  — kill + start fresh session
   BAT_OT_input_modal      — modal operator: captures all keystrokes
-  BAT_OT_launch_agent     — convenience: open terminal with a specific CLI
+
 
 THREADING RULES:
   - All bpy access is in the main thread (operators, modal, timer).
@@ -108,7 +108,7 @@ def _event_to_bytes(event) -> Optional[bytes]:
 # ─── BAT_OT_open_terminal ─────────────────────────────────────────────────────
 
 class BAT_OT_open_terminal(bpy.types.Operator):
-    """Open the Blender Agent Terminal in this area"""
+    """Open the Blender Interactive Terminal in this area"""
     bl_idname = "bat.open_terminal"
     bl_label = "Open Terminal"
     bl_description = "Open an interactive terminal panel in this Text Editor area"
@@ -271,41 +271,6 @@ class BAT_OT_restart_session(bpy.types.Operator):
                 self.report({"INFO"}, f"Session restarted: {' '.join(cmd)}")
             else:
                 self.report({"WARNING"}, "Restart failed")
-        return {"FINISHED"}
-
-
-# ─── BAT_OT_launch_agent ─────────────────────────────────────────────────────
-
-class BAT_OT_launch_agent(bpy.types.Operator):
-    """Launch a specific AI CLI agent in the terminal"""
-    bl_idname = "bat.launch_agent"
-    bl_label = "Launch Agent"
-    bl_description = "Open the terminal and launch a specific AI CLI agent"
-
-    agent: StringProperty(name="Agent", default="claude")  # type: ignore
-
-    def execute(self, context: bpy.types.Context):
-        exe = find_executable(self.agent)
-        if not exe:
-            self.report(
-                {"ERROR"},
-                f"'{self.agent}' not found on PATH. Please install it first."
-            )
-            return {"CANCELLED"}
-
-        # Use open_terminal with the agent command
-        wm = context.window_manager
-        if wm.bat_terminal_active:
-            # Already open — send the command to the running shell
-            from ..terminal.manager import get_manager
-            manager = get_manager()
-            if manager:
-                session = manager.get_active()
-                if session and session.is_alive():
-                    session.send_line(self.agent)
-                    return {"FINISHED"}
-
-        bpy.ops.bat.open_terminal("INVOKE_DEFAULT", initial_cmd=self.agent)
         return {"FINISHED"}
 
 
@@ -529,7 +494,7 @@ def _get_blend_dir(context: bpy.types.Context) -> str:
 # ─── BAT_OT_update_extension ──────────────────────────────────────────────────
 
 class BAT_OT_update_extension(bpy.types.Operator):
-    """Update Blender Agent Terminal from GitHub"""
+    """Update Blender Interactive Terminal from GitHub"""
     bl_idname = "bat.update_extension"
     bl_label = "Update Terminal"
     bl_description = "Download and install the latest OTA update from GitHub"
@@ -573,9 +538,9 @@ class BAT_OT_update_extension(bpy.types.Operator):
 # ─── BAT_OT_toggle_terminal_window ────────────────────────────────────────────
 
 class BAT_OT_toggle_terminal_window(bpy.types.Operator):
-    """Open Agent Terminal in a new floating window"""
+    """Open Interactive Terminal in a new floating window"""
     bl_idname = "bat.toggle_terminal_window"
-    bl_label = "Agent Terminal Window"
+    bl_label = "Interactive Terminal Window"
     
     def invoke(self, context: bpy.types.Context, event):
         return self.execute(context)
@@ -607,12 +572,12 @@ class BAT_OT_toggle_terminal_window(bpy.types.Operator):
 # ─── BAT_OT_create_workspace ──────────────────────────────────────────────────
 
 class BAT_OT_create_workspace(bpy.types.Operator):
-    """Create or switch to the Agent Terminal workspace"""
+    """Create or switch to the Interactive Terminal workspace"""
     bl_idname = "bat.create_workspace"
-    bl_label = "Agent Terminal Workspace"
+    bl_label = "Interactive Terminal Workspace"
     
     def execute(self, context: bpy.types.Context):
-        ws_name = "Agent Terminal"
+        ws_name = "Interactive Terminal"
         if ws_name not in bpy.data.workspaces:
             # Create a new workspace by duplicating the current one
             bpy.ops.workspace.add()
@@ -657,7 +622,7 @@ CLASSES = [
     BAT_OT_kill_process,
     BAT_OT_clear_terminal,
     BAT_OT_restart_session,
-    BAT_OT_launch_agent,
+
     BAT_OT_update_extension,
     BAT_OT_input_modal,
     BAT_OT_toggle_terminal_window,

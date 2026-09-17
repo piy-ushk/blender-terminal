@@ -1,10 +1,10 @@
 """
-Blender Agent Terminal — Process Discovery & Environment
+Blender Interactive Terminal — Process Discovery & Environment
 
 Provides:
   find_executable(name)   — cross-platform shutil.which wrapper
   get_user_env()          — a clean copy of os.environ for subprocess use
-  detect_agents()         — probes for known AI CLIs and common tools
+  detect_tools()          — probes for common tools
 """
 
 import os
@@ -18,15 +18,7 @@ from ..core.log import get_logger
 
 log = get_logger("process.discovery")
 
-# ─── Known agent / tool names to probe ───────────────────────────────────────
 
-_KNOWN_AGENTS: Dict[str, str] = {
-    "claude":  "Claude Code (Anthropic)",
-    "codex":   "OpenAI Codex CLI",
-    "gemini":  "Gemini CLI (Google)",
-    "aider":   "Aider",
-    "continue": "Continue",
-}
 
 _KNOWN_TOOLS: Dict[str, str] = {
     "node":    "Node.js",
@@ -142,32 +134,7 @@ def get_user_env() -> Dict[str, str]:
         
         env["BLENDER_IPC_PORT"] = str(port)
         
-        # Inject agent wrappers to force system prompts
-        import bpy
-        import stat
-        blend_file = bpy.data.filepath
-        blend_dir = os.path.dirname(blend_file) if blend_file else "The current Blender file is not saved yet."
-        
-        prompt = (
-            "You are an AI assistant running inside a terminal directly embedded in Blender. "
-            "You have FULL access to Blender's Python API via the 'bpy-exec' command line tool. "
-            "Your primary goal is to help the user manipulate the 3D scene, UI, and objects. "
-            "Instead of telling the user how to do things, DO IT YOURSELF by running python scripts or 'bpy-exec \"...\"'. "
-            f"Restrict your workspace to this directory: {blend_dir}."
-        )
-        prompt_esc = prompt.replace('"', '\\"')
-        
-        claude_path = shutil.which("claude")
-        if claude_path and not claude_path.startswith(bin_dir):
-            wrap_path = os.path.join(bin_dir, "claude")
-            with open(wrap_path, "w") as f:
-                f.write(f'#!/bin/sh\nexec "{claude_path}" --system-prompt "{prompt_esc}" "$@"\n')
-            os.chmod(wrap_path, os.stat(wrap_path).st_mode | stat.S_IEXEC)
-            
-            # Windows compatibility wrapper
-            wrap_cmd_path = os.path.join(bin_dir, "claude.cmd")
-            with open(wrap_cmd_path, "w") as f:
-                f.write(f'@echo off\r\n"{claude_path}" --system-prompt "{prompt_esc}" %*\r\n')
+
         
         # Prepend our bin_dir to PATH so bpy-exec and wrappers are immediately available
         env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
@@ -176,16 +143,6 @@ def get_user_env() -> Dict[str, str]:
 
     return env
 
-
-def detect_agents() -> Dict[str, Optional[str]]:
-    """
-    Probe for known AI CLI agents.
-    Returns dict: agent_key → full_path_or_None
-    """
-    result: Dict[str, Optional[str]] = {}
-    for name in _KNOWN_AGENTS:
-        result[name] = find_executable(name)
-    return result
 
 
 def detect_tools() -> Dict[str, Optional[str]]:
@@ -202,14 +159,9 @@ def detect_tools() -> Dict[str, Optional[str]]:
 def detect_all() -> Dict[str, Dict[str, Optional[str]]]:
     """Return combined detection results."""
     return {
-        "agents": detect_agents(),
         "tools": detect_tools(),
     }
 
-
-def get_agent_label(key: str) -> str:
-    """Human-readable label for an agent key."""
-    return _KNOWN_AGENTS.get(key, key)
 
 
 def get_tool_label(key: str) -> str:

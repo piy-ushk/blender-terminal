@@ -1,5 +1,5 @@
 """
-Blender Agent Terminal — Terminal Backend Abstract Base Class
+Blender Interactive Terminal — Terminal Backend Abstract Base Class
 
 All platform-specific backends implement this interface.
 The session layer only talks to TerminalBackend — it never

@@ -1,7 +1,7 @@
 """
-Blender Agent Terminal — IPC Server Bridge
+Blender Interactive Terminal — IPC Server Bridge
 
-Provides a local HTTP server that allows external CLI tools (like `bpy-exec` used by agents)
+Provides a local HTTP server that allows external CLI tools (like `bpy-exec` used by subprocesses)
 to send Python code to be executed safely on Blender's main thread.
 """
 
@@ -44,7 +44,7 @@ def _process_queue() -> float:
         sys.stdout = sys.stderr = buf = io.StringIO()
 
         try:
-            # Execute with persistent globals so agents can chain commands across multiple script calls
+            # Execute with persistent globals so scripts can chain commands across multiple script calls
             if not hasattr(bpy, "_bat_ipc_globals"):
                 bpy._bat_ipc_globals = {"bpy": bpy}  # type: ignore
 
